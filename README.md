@@ -5,9 +5,9 @@
 [![Work in Progress](https://img.shields.io/badge/status-WIP-red?style=for-the-badge)]()
 [![AI Generated](https://img.shields.io/badge/AI-Generated-9cf?style=for-the-badge)]()
 [![Vibecoded](https://img.shields.io/badge/Vibecoded-ff69b4?style=for-the-badge)]()
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.12.2-blue?style=for-the-badge&logo=minecraft)]()
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.8--26.1.2-blue?style=for-the-badge&logo=minecraft)]()
 [![License: GPL--3.0](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)]()
-[![Release](https://img.shields.io/badge/Release-v0.0.4--hotfix.3-blue?style=for-the-badge)](https://github.com/gabytz777/vib-MC/releases/tag/v0.0.4-hotfix.3)
+[![Release](https://img.shields.io/badge/Release-v0.0.6-blue?style=for-the-badge)](https://github.com/vib-studios/vib-MC/releases/tag/v0.0.6)
 
 **vibed into existence** — a Minecraft server made entirely by AI, one prompt at a time.
 
@@ -264,6 +264,7 @@ npm run test:dimensions
 | ✅ | v0.0.4-hotfix.2 |
 | ✅ | v0.0.4-hotfix.3 |
 | ✅ | v0.0.5 - stable |
+| ✅ | v0.0.5-hotfix.1 |
 | 🚀 | **v0.0.6 - PacketEvents & Netty based networking w/ multi-version**  |
 
 ## License
