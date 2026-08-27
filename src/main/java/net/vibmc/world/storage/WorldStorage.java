@@ -25,7 +25,7 @@ import java.util.zip.GZIPOutputStream;
  *     r.&lt;x&gt;.&lt;z&gt;.chunk     gzipped block data for one chunk
  * </pre>
  *
- * Chunk payloads are the raw {@code short[]} block array, so a saved chunk restores
+ * WorldChunk payloads are PacketEvents wrapped-state global IDs, so a saved chunk restores
  * exactly what was in memory rather than being re-derived from the seed. Writes go to
  * a temporary file and are then moved into place, so an interrupted save cannot leave
  * a half-written chunk behind.
@@ -33,10 +33,12 @@ import java.util.zip.GZIPOutputStream;
 public class WorldStorage {
     private static final int LEVEL_MAGIC = 0x56424C56;  // "VBLV"
     private static final int CHUNK_MAGIC = 0x5642434B;  // "VBCK"
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
 
-    /** 16 x 16 x 256, matching Chunk's block array. */
+    /** 16 x 16 x 256, matching WorldChunk's block array. */
     private static final int BLOCKS_PER_CHUNK = 16 * 16 * 256;
+    private static final long MAX_CHUNK_FILE_BYTES = 8L << 20;
+    private static final int MAX_WEATHER_BYTES = 64;
 
     private final Path worldDir;
     private final Path regionDir;
@@ -75,7 +77,7 @@ public class WorldStorage {
             long seed = in.readLong();
             long worldTime = in.readLong();
             long timeOfDay = in.readLong();
-            String weather = in.readUTF();
+            String weather = readBoundedString(in, MAX_WEATHER_BYTES, "weather");
             return new LevelData(seed, worldTime, timeOfDay, weather);
         }
     }
@@ -90,9 +92,13 @@ public class WorldStorage {
             out.writeLong(level.seed());
             out.writeLong(level.worldTime());
             out.writeLong(level.timeOfDay());
-            out.writeUTF(level.weather());
+            writeBoundedString(out, level.weather(), MAX_WEATHER_BYTES, "weather");
         }
-        moveIntoPlace(tmp, levelFile);
+        try {
+            moveIntoPlace(tmp, levelFile);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
     }
 
     public boolean hasChunk(int chunkX, int chunkZ) {
@@ -104,10 +110,13 @@ public class WorldStorage {
      * never been saved. A corrupt or truncated file is reported as an IOException so
      * the caller can fall back to generating fresh terrain.
      */
-    public short[] readChunk(int chunkX, int chunkZ) throws IOException {
+    public com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] readChunk(int chunkX, int chunkZ) throws IOException {
         Path path = chunkPath(chunkX, chunkZ);
         if (!Files.isRegularFile(path)) {
             return null;
+        }
+        if (Files.size(path) > MAX_CHUNK_FILE_BYTES) {
+            throw new IOException("chunk file exceeds size limit");
         }
         try (InputStream raw = Files.newInputStream(path);
              DataInputStream in = new DataInputStream(
@@ -126,15 +135,13 @@ public class WorldStorage {
                 throw new IOException("chunk claims to be " + storedX + "," + storedZ
                         + " but was stored as " + chunkX + "," + chunkZ);
             }
-            short[] blocks = new short[BLOCKS_PER_CHUNK];
-            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) {
-                blocks[i] = in.readShort();
-            }
+            com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] blocks = new com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[BLOCKS_PER_CHUNK];
+            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) blocks[i] = com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState.getByGlobalId(in.readInt());
             return blocks;
         }
     }
 
-    public void writeChunk(int chunkX, int chunkZ, short[] blocks) throws IOException {
+    public void writeChunk(int chunkX, int chunkZ, com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] blocks) throws IOException {
         if (blocks.length != BLOCKS_PER_CHUNK) {
             throw new IOException("expected " + BLOCKS_PER_CHUNK + " blocks, got " + blocks.length);
         }
@@ -148,11 +155,24 @@ public class WorldStorage {
             out.writeInt(FORMAT_VERSION);
             out.writeInt(chunkX);
             out.writeInt(chunkZ);
-            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) {
-                out.writeShort(blocks[i]);
-            }
+            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) out.writeInt(blocks[i].getGlobalId());
         }
         moveIntoPlace(tmp, dest);
+    }
+
+    private static String readBoundedString(DataInputStream input, int maximumBytes, String label) throws IOException {
+        int length = input.readUnsignedShort();
+        if (length > maximumBytes) throw new IOException(label + " is too long");
+        byte[] bytes = new byte[length];
+        input.readFully(bytes);
+        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static void writeBoundedString(DataOutputStream output, String value, int maximumBytes, String label) throws IOException {
+        byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (bytes.length > maximumBytes) throw new IOException(label + " is too long");
+        output.writeShort(bytes.length);
+        output.write(bytes);
     }
 
     private Path chunkPath(int chunkX, int chunkZ) {

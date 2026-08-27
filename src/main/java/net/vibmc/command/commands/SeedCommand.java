@@ -6,7 +6,7 @@ import net.vibmc.server.VibMC;
 
 public class SeedCommand extends Command {
     public SeedCommand() {
-        super("seed", "Show the world seed", "/seed", null);
+        super("seed", "Show the world seed", "/seed", "vibmc.command.seed");
     }
 
     @Override

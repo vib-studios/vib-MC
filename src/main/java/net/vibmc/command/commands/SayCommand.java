@@ -3,6 +3,7 @@ package net.vibmc.command.commands;
 import net.vibmc.command.Command;
 import net.vibmc.command.CommandSender;
 import net.vibmc.server.VibMC;
+import net.vibmc.network.JsonText;
 
 public class SayCommand extends Command {
     public SayCommand() {
@@ -21,7 +22,7 @@ public class SayCommand extends Command {
             message.append(arg);
         }
         VibMC.getInstance().getPlayerManager().broadcastMessage(
-                "{\"text\":\"§7[" + sender.getName() + "] " + message + "\"}");
+                JsonText.component("§7[" + sender.getName() + "] " + message));
         return true;
     }
 }

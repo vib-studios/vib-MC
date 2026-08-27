@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'com.gradleup.shadow' version '9.6.1'
 }
 
 java {
@@ -9,9 +10,8 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.release = 8
-    // Targeting 8 is deliberate (the release still runs on Java 8); silence javac's
-    // "source/target value 8 is obsolete" notice so real warnings stay visible.
-    options.compilerArgs << '-Xlint:-options'
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing']
 }
 
 application {
@@ -20,18 +20,59 @@ application {
 
 repositories {
     mavenCentral()
+    maven { url = uri('https://repo.codemc.io/repository/maven-releases/') }
 }
 
 dependencies {
+    implementation 'io.netty:netty-all:4.1.111.Final'
+    implementation 'com.github.retrooper:packetevents-api:2.13.0'
+    implementation 'com.github.retrooper:packetevents-netty-common:2.13.0'
+    implementation 'net.kyori:adventure-api:4.26.1'
+    implementation 'net.kyori:adventure-nbt:4.26.1'
+    implementation 'net.kyori:adventure-text-serializer-gson:4.26.1'
+    implementation 'net.kyori:adventure-text-serializer-legacy:4.26.1'
+    implementation 'net.kyori:adventure-text-serializer-gson-legacy-impl:4.26.1'
+    implementation 'com.google.code.gson:gson:2.11.0'
+
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
-    testImplementation 'org.mockito:mockito-core:5.4.0'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.0'
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+}
+
+// Keep the full minecraft-data submodule available to developers, but only package the
+// Java-edition registry/configuration snapshots used by the runtime loader.
+def minecraftDataRoot = file('src/main/resources/vendored/minecraft-data')
+sourceSets.main.resources.exclude 'vendored/minecraft-data/**'
+processResources {
+    from(minecraftDataRoot) {
+        into 'vendored/minecraft-data'
+        include 'data/dataPaths.json'
+        include 'data/pc/common/protocolVersions.json'
+        include 'data/pc/common/versions.json'
+        include 'data/pc/*/version.json'
+        include 'data/pc/*/loginPacket.json'
+    }
+}
+
+tasks.register('verifyMinecraftDataResources') {
+    dependsOn tasks.named('processResources')
+    doLast {
+        def root = layout.buildDirectory.dir('resources/main/vendored/minecraft-data').get().asFile
+        fileTree(root).files.each { file ->
+            def path = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+            def allowed = path == 'data/dataPaths.json' ||
+                    path == 'data/pc/common/protocolVersions.json' ||
+                    path == 'data/pc/common/versions.json' ||
+                    path.matches('data/pc/[^/]+/(version|loginPacket)\\.json')
+            if (!allowed) throw new GradleException("Unexpected bundled minecraft-data resource: ${path}")
+        }
+    }
 }
 
 test {
     useJUnitPlatform()
     testLogging {
         events "passed", "skipped", "failed"
+        exceptionFormat "full"
     }
 }
 
@@ -40,9 +81,29 @@ jar {
         attributes(
             'Main-Class': 'net.vibmc.server.VibMC',
             'Implementation-Title': 'vib-MC',
-            'Implementation-Version': '0.0.5-hotfix.1'
+            'Implementation-Version': '0.0.6'
         )
     }
     archiveBaseName = 'vib-mc'
     archiveVersion = ''
+    archiveClassifier = 'plain'
+}
+
+shadowJar {
+    archiveBaseName = 'vib-mc'
+    archiveVersion = ''
+    archiveClassifier = ''
+    // Shadow 9 excludes duplicate resources before transformers by default. Service providers
+    // must reach ServiceFileTransformer so PacketEvents and Adventure providers are all merged.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    mergeServiceFiles()
+    append('META-INF/io.netty.versions.properties')
+    exclude('META-INF/maven/**')
+}
+
+build.dependsOn shadowJar
+tasks.named('check') { dependsOn tasks.named('verifyMinecraftDataResources') }
+
+tasks.named('startScripts') {
+    dependsOn shadowJar
 }

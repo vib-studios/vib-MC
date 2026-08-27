@@ -1,19 +1,19 @@
 package net.vibmc.plugin.event;
 
-import net.vibmc.entity.PlayerEntity;
+import net.vibmc.entity.ServerPlayer;
 
 public class ChatEvent extends Event implements Cancellable {
-    private final PlayerEntity player;
+    private final ServerPlayer player;
     private String message;
     private boolean cancelled;
 
-    public ChatEvent(PlayerEntity player, String message) {
+    public ChatEvent(ServerPlayer player, String message) {
         this.player = player;
         this.message = message;
         this.cancelled = false;
     }
 
-    public PlayerEntity getPlayer() { return player; }
+    public ServerPlayer getPlayer() { return player; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
 

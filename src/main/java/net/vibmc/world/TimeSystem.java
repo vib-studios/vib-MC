@@ -1,7 +1,7 @@
 package net.vibmc.world;
 
 public class TimeSystem {
-    private long timeOfDay;
+    private volatile long timeOfDay;
 
     public TimeSystem() {
         this.timeOfDay = 6000;
@@ -20,13 +20,16 @@ public class TimeSystem {
     }
 
     public String phase() {
-        if (timeOfDay < 6000) {
+        if (timeOfDay < 12000) {
             return "day";
         }
-        if (timeOfDay < 18000) {
+        if (timeOfDay < 13000) {
             return "sunset";
         }
-        return "night";
+        if (timeOfDay < 23000) {
+            return "night";
+        }
+        return "sunrise";
     }
 
     public long timeOfDay() {

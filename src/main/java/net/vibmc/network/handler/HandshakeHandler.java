@@ -1,113 +1,99 @@
 package net.vibmc.network.handler;
 
-import net.vibmc.auth.GameProfile;
-import net.vibmc.auth.LegacyForwarding;
-import net.vibmc.network.ClientConnection;
-import net.vibmc.network.PacketBuffer;
+import net.vibmc.entity.ServerPlayer;
+import net.vibmc.network.HandshakeRequest;
 import net.vibmc.network.ProtocolState;
 import net.vibmc.server.ServerConfig;
 import net.vibmc.server.VibMC;
+import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 
-public class HandshakeHandler implements PacketHandler {
-    /** The only protocol vib-MC speaks: Minecraft 1.12.2. */
-    public static final int SUPPORTED_PROTOCOL = 340;
+import java.net.InetSocketAddress;
+import java.util.UUID;
 
-    @Override
-    public void handle(ClientConnection connection, int packetId, PacketBuffer buffer) {
-        if (packetId != 0x00) {
-            // Legacy server list ping (0xFE) and anything else is ignored.
-            return;
-        }
-        int protocol = buffer.readVarInt();
-        String address = buffer.readString();
-        buffer.readUnsignedShort(); // server port
-        int nextState = buffer.readVarInt();
+public final class HandshakeHandler implements PacketHandler {
+    public void process(ServerPlayer connection, HandshakeRequest request) {
+        int protocol = request.protocolVersion();
+        String address = request.address();
+        int nextState = request.nextState();
+        // PacketEvents' InternalPacketListener owns User client-version and protocol-state
+        // transitions. vib-MC only mirrors the handshake values needed by its core handlers.
 
         if (nextState == 1) {
-            // Status pings are answered for every protocol, so outdated clients can still
-            // see the server in their list and read why they cannot join.
+            connection.setVirtualHost(address);
             connection.setProtocolState(ProtocolState.STATUS);
             connection.setHandler(new StatusHandler());
             return;
         }
         if (nextState != 2) {
-            connection.disconnect("Unsupported login state");
+            connection.forceClose();
             return;
         }
 
         connection.setProtocolState(ProtocolState.LOGIN);
-        if (protocol != SUPPORTED_PROTOCOL) {
-            connection.disconnect(versionKickMessage(protocol));
+        ClientVersion activeVersion = connection.getUser().getClientVersion();
+        if (isKnownBrokenVersion(activeVersion)) {
+            VibMC.getInstance().getLogger().warn(
+                    "Rejecting known-broken protocol %d (%s)",protocol,activeVersion.getReleaseName());
+            if(activeVersion==ClientVersion.V_1_19_3)
+                connection.disconnect("Minecraft 1.19.3 is unsupported due to a PacketEvents login parsing issue.");
+            else
+                connection.disconnect("Minecraft 1.16 and 1.16.1 are unsupported due to PacketEvents packet ID issues.");
             return;
         }
-        if (!applyProxyForwarding(connection, address)) {
-            return;
+        VibMC.getInstance().getLogger().info(
+                "Accepting login protocol %d; PacketEvents client=%s/%d, native server=1.12.2/340",
+                protocol, activeVersion.getReleaseName(), activeVersion.getProtocolVersion());
+
+        ServerConfig config = VibMC.getInstance().getConfig();
+        if (config.useLegacyProxyForwarding()) {
+            if (!isTrustedProxy(connection, config.proxyTrustedAddress())) {
+                connection.disconnect("This server requires connections through its configured proxy.");
+                return;
+            }
+            String[] forwarded = address.split("\\0", -1);
+            if (forwarded.length < 3) {
+                connection.disconnect("Invalid proxy forwarding data.");
+                return;
+            }
+            try {
+                connection.setVirtualHost(forwarded[0]);
+                connection.setForwardedAddress(forwarded[1]);
+                connection.setProfileUuid(parseUuid(forwarded[2]));
+                if (forwarded.length >= 4) {
+                    connection.setProfileProperties(SessionAuthentication.parseProperties(forwarded[3]));
+                }
+            } catch (IllegalArgumentException e) {
+                connection.disconnect("Invalid proxy forwarding identity.");
+                return;
+            }
+        } else {
+            connection.setVirtualHost(address);
         }
         connection.setHandler(new LoginHandler());
     }
 
-    /**
-     * Tells the player which side is out of date, the way vanilla does: a lower protocol
-     * means their client is older than the server, a higher one means the server is older
-     * than their client.
-     */
-    public static String versionKickMessage(int protocol) {
-        return protocol < SUPPORTED_PROTOCOL
-                ? "Outdated client! Please use Minecraft 1.12.2."
-                : "Outdated server! This server supports Minecraft 1.12.2 only.";
+    static boolean isKnownBrokenVersion(ClientVersion version){
+        return version==ClientVersion.V_1_16||version==ClientVersion.V_1_16_1
+                ||version==ClientVersion.V_1_19_3;
     }
 
-    /**
-     * Handles the proxy side of the handshake.
-     *
-     * @return true if the login may continue, false if the connection was rejected
-     */
-    private boolean applyProxyForwarding(ClientConnection connection, String address) {
-        ServerConfig config = VibMC.getInstance().getConfig();
-        boolean forwarded = LegacyForwarding.looksForwarded(address);
-
-        if (!config.proxyLegacy()) {
-            if (forwarded) {
-                // Someone is speaking proxy protocol at a server that is not expecting it;
-                // accepting it would let them pick their own identity.
-                connection.disconnect("This server is not configured to accept proxy connections");
-                return false;
-            }
-            return true;
-        }
-
-        // Legacy forwarding carries no proof of its own - the trust comes entirely from
-        // the connection's source address, so it has to be checked before anything else.
-        if (!isTrustedProxy(connection, config.proxyTrustedAddress())) {
-            VibMC.getInstance().getLogger().warn(
-                    "Rejected a proxy login from %s (proxy-trusted-address=%s)",
-                    connection.remoteAddress(), config.proxyTrustedAddress());
-            connection.disconnect("You must connect through the proxy");
-            return false;
-        }
-        if (!forwarded) {
-            connection.disconnect("This server only accepts connections through its proxy");
-            return false;
-        }
-
+    private static boolean isTrustedProxy(ServerPlayer connection, String expectedAddress) {
         try {
-            GameProfile profile = LegacyForwarding.parse(address);
-            connection.setProfile(profile);
-            return true;
-        } catch (RuntimeException e) {
-            VibMC.getInstance().getLogger().warn("Malformed proxy handshake from %s: %s",
-                    connection.remoteAddress(), e.getMessage());
-            connection.disconnect("Malformed proxy handshake");
+            InetSocketAddress remote = (InetSocketAddress) connection.channel().remoteAddress();
+            return remote.getAddress().getHostAddress().equals(expectedAddress)
+                    || remote.getHostString().equalsIgnoreCase(expectedAddress);
+        } catch (Exception e) {
             return false;
         }
     }
 
-    /** A blank trusted address means "trust anything", for setups firewalled at the network. */
-    private static boolean isTrustedProxy(ClientConnection connection, String trusted) {
-        if (trusted == null || trusted.isEmpty()) {
-            return true;
+    private static UUID parseUuid(String value) {
+        String normalized = value.replace("-", "");
+        if (!normalized.matches("[0-9a-fA-F]{32}")) {
+            throw new IllegalArgumentException("bad UUID");
         }
-        String remote = connection.remoteAddress();
-        return trusted.equals(remote);
+        return UUID.fromString(normalized.substring(0, 8) + "-" + normalized.substring(8, 12)
+                + "-" + normalized.substring(12, 16) + "-" + normalized.substring(16, 20)
+                + "-" + normalized.substring(20));
     }
 }

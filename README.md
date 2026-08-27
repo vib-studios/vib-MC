@@ -6,126 +6,287 @@
 [![AI Generated](https://img.shields.io/badge/AI-Generated-9cf?style=for-the-badge)]()
 [![Vibecoded](https://img.shields.io/badge/Vibecoded-ff69b4?style=for-the-badge)]()
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.12.2-blue?style=for-the-badge&logo=minecraft)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)]()
-[![Release](https://img.shields.io/badge/Release-v0.0.5--hotfix.1-blue?style=for-the-badge)](https://github.com/gabytz777/vib-MC/releases/tag/v0.0.5-hotfix.1)
+[![License: GPL--3.0](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)]()
+[![Release](https://img.shields.io/badge/Release-v0.0.4--hotfix.3-blue?style=for-the-badge)](https://github.com/gabytz777/vib-MC/releases/tag/v0.0.4-hotfix.3)
 
 **vibed into existence** — a Minecraft server made entirely by AI, one prompt at a time.
 
-> ⚠️ **Latest release: v0.0.5-hotfix.1** — the Nether and the End actually work now: portals you build yourself, real lighting, and dimension travel that arrives. This whole thing is still being coded by an AI. YMMV.
-
 </div>
+
 ---
 
-`vib-MC` is a Minecraft server (protocol 340 / 1.12.2) that was **entirely vibecoded by AI**. No human wrote any of this. It connects, generates terrain, and occasionally works. The latest release runs on Java 8 or newer, and so does building from source.
+`vib-MC` is an experimental Minecraft Java Edition 1.12.2 server implementation (protocol 340) built from scratch and developed through AI-assisted/vibecoded development.
 
-## What's new in v0.0.5-hotfix.1 (changes since v0.0.5)
+The project focuses on experimenting with Minecraft server internals, custom world generation, persistence, multiplayer, plugins, and making the server easy to extend.
 
-The dimensions shipped in v0.0.5 generated but were not really playable. This fixes that,
-and the way you get to them changed: nothing is handed to you at spawn any more.
+vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may change without migration, and resets can be required at any time.
 
-- **Portals actually appear** — portal blocks were sent with a block state the 1.12.2 client does not know, so it drew every portal as air. You could stand in one and never see it
-- **Dimension travel arrives** — a dimension change sent a Respawn packet and never told the client where it had landed, so it sat on "Downloading terrain" forever. Everything that packet throws away is now re-sent behind it
-- **You build your own way in** — no free obsidian portal at spawn. Rare lava pools sitting in a bed of stone are the obsidian supply: pour water on lava, mine it, build a frame, light it with flint and steel. Twelve eyes of ender in a frame ring open an End portal
-- **Break and place blocks** — this did not exist at all before, which is why the above was impossible. Digging, placing, drops into your inventory, and inventory sync to the client
-- **The Nether is a place** — it was solid netherrack with the occasional bubble. Now it is an open cavern between a rolling floor and a hanging ceiling, over a lava sea, with soul sand, glowstone and quartz
-- **The End has towers** — ten obsidian pillars ring the central island, and the arrival platform sits in a patch of void the generator keeps clear, so you land on the platform instead of inside an island
-- **Real lighting** — sky light was worked out per column and block light was hardcoded to zero, which is why trees rendered as black lumps and glowstone gave off nothing. Both are now flooded properly
-- **Fall damage, and the void kills you** — falling used to trip the anti-flight check and kick you off the server. Now you take fall damage, dying puts up a death screen, and you respawn in the overworld
-- **A usable console** — chunk and packet logging moved behind `log-level=debug`, so the console is something you can type commands into
-- **EULA** — `eula.txt` is written on first start and must be accepted, as with vanilla
-- **Fixed a disconnect under load** — packets were encrypted and queued as two separate steps, so two threads sending at once could put the encrypted stream out of order and drop the client with "Bad packet id"
+## Latest Release — v0.0.4-hotfix.3
+
+Hotfix 3 adds the world persistence system and makes worlds survive server restarts.
+
+### World persistence
+
+- Persistent `world/` directory
+- Persistent `level.dat`
+- Persistent world seed
+- Persistent chunk storage under `world/region/`
+- UUID-keyed player state under `playerdata/` (dimension, position, health, food, game mode, flight, selected slot, and complete inventory item NBT)
+- Gzipped chunk data
+- Chunks load from disk when already saved
+- New chunks are generated only when they do not already exist
+- Incremental saving — unchanged chunks are not rewritten
+- `/save-all` actually saves changed chunks and reports how many were written
+- Automatic saving through `autosave-interval-ticks`
+- Runtime `/save-on` and `/save-off` control; `/save-all` always forces a save
+- Corrupt/truncated chunk files are detected and regenerated
+- Chunk writes use temporary files before replacement to reduce partial-write corruption
+
+### Configuration
+
+```properties
+autosave-interval-ticks=6000
+```
+
+Set `autosave-interval-ticks=0` to disable automatic saving.
+
+### New-world seeds
+
+The default is now `seed=`. A blank seed chooses a random 64-bit seed once, writes it to the new world's `level.dat`, and restores that same seed on every restart. Existing `server.properties` files are never rewritten, and an existing saved world's seed always wins.
+
+### Authentication and proxies
+
+- `online-mode=true` uses the Minecraft 1.12.2 RSA/AES login handshake and Mojang session-server verification.
+- Authenticated UUIDs and signed skin properties are forwarded to clients.
+- `proxy-mode=legacy` accepts trusted BungeeCord forwarding and Velocity's 1.12.2-compatible **legacy** forwarding mode.
+- Set `proxy-trusted-address` to the proxy's backend-facing address. Direct connections are rejected in proxy mode.
+- Velocity modern forwarding cannot exist on protocol 340 because Login Plugin Request was added after Minecraft 1.12.2; configure Velocity with `player-info-forwarding-mode = "legacy"` for this server.
+
+```properties
+online-mode=true
+proxy-mode=none
+proxy-trusted-address=127.0.0.1
+shutdown-message=Server closed
+```
+
+### World layout
+
+```text
+world/
+├── level.dat            seed, time, weather, and world metadata
+└── region/
+    └── r.<x>.<z>.chunk  gzipped chunk data
+```
+
+For an existing world, the seed stored in `level.dat` takes priority over the configured seed so an existing world cannot silently change its terrain generation seed.
 
 ## Features
 
 | Status | Feature |
 |:------:|---------|
-| ✅ | Actually starts |
-| ✅ | People can join |
-| ✅ | Terrain generates (somewhere) |
-| ✅ | Terrain renders (13-bit chunk data, vanilla client sees it) |
-| ✅ | Camera moves (chunk streaming works) |
+| ✅ | Server startup |
+| ✅ | Minecraft 1.12.2 client connections |
+| ✅ | Custom world generation |
+| ✅ | Chunk generation and streaming |
+| ✅ | Players appear in each other's tab list and world |
+| ✅ | Player movement and disconnects synchronize between clients |
+| ✅ | Direct online-mode authentication and legacy proxy forwarding |
+| ✅ | Persistent Overworld, Nether, and End dimensions |
+| ✅ | Detection-based Nether portal activation and dimension travel |
+| ✅ | Lenient vanilla-style flight detection when `allow-flight=false` |
+| ✅ | Server-stop and unsupported-version kick messages |
+| ✅ | World persistence |
+| ✅ | Chunk persistence |
+| ✅ | Incremental world saving |
 | ✅ | Plugin API |
-| ❌ | Mobs (no entities are sent to clients yet — players only) |
-| ✅ | Nether (open caverns, lava sea, glowstone, quartz) |
-| ✅ | End (islands, obsidian towers, arrival platform, exit portal) |
-| ✅ | Portals (player-built: flint and steel, or 12 eyes of ender) |
-| ✅ | Lighting (sky and block light are flooded, not guessed per column) |
-| ⚠️ | Building (break/place works; no crafting, no tool tiers) |
-| ❌ | The dragon fight (no mob entities yet — towers are just scenery) |
-| ✅ | Online mode (Mojang-verified logins, real skins) |
-| ❌ | Working game (soon™) |
+| ✅ | Commands |
+| ✅ | Multiplayer-oriented server architecture |
+| 🚧 | More advanced terrain generation |
+| ✅ | Per-column biome data sent to clients |
+| ✅ | Data-driven structure templates with default oak trees |
+| ✅ | Nether |
 
-## Requirements
+## World Generation
 
-- **Java 8 or newer** to run v0.0.5 (and every release from v0.0.3 up)
-- **Java 8 or newer** to build from source
+vib-MC has its own procedural world generator rather than relying on Vanilla's terrain generator.
 
-## Quick Start
+The generator is being expanded with features such as:
 
-```bash
-gradle build
-java -jar build/libs/vib-mc.jar
+- Hills and varied terrain
+- Sand and water
+- Trees
+- Ores
+- Caves and cave entrances
+- Different environments/biomes
+- Generated structures
+
+World generation uses a seed and remains deterministic for a given world seed. New chunks now use vanilla-scale sea level and layered grass/dirt/stone terrain, beaches, oceans, hills, caves, coal and iron ore. The Nether has a bedrock roof, netherrack caverns, soul sand, and lava; the End has deterministic central islands. Oak trees are placed through data-driven structure templates with biome inclusion/exclusion and terrain anchors, so they do not generate in deserts or oceans and trunks remain grounded. Every newly generated structured Overworld has a deterministic multi-piece village near spawn with four houses, roads, a well, and a farm. Existing saved chunks are preserved; only newly generated chunks use the newer generator.
+
+## Data-driven structures
+
+Generated objects are owned by the structure system rather than hardcoded into the terrain generator. The registry supports reusable `.vstruct` pieces, weighted and recursively nested `.vpool` pools, and multi-piece `.vstructure` composites. Templates support palettes, individual blocks, compact cuboid `fill` operations, biome rules, rotation, terrain anchoring, per-block surface conformance, spacing, salts, and deterministic selection. Built-ins are indexed under `src/main/resources/structures/`, while server-specific files under `structures/` can add or override registry entries.
+
+The spawn village is a real composite resource at `structures/village/spawn_village.vstructure`. Its roads, house, well, and farm are separate templates, and house nodes resolve through nested weighted pools. Composite node coordinates identify the child template's declared anchor—not its minimum corner—so rotation keeps a piece centered on its requested position. `terrain` anchoring places template Y=0 at the terrain surface, while `surface` projects every block column onto its own terrain surface. Composites can declare `exclude-structures`; the village excludes `minecraft:oak_tree` across its configured footprint, preventing trunks or canopies from intersecting the village. Oak trees remain standalone structure templates. Both are disabled when `generate-structures=false`.
+
+```properties
+name=example:small_rock
+size=2,1,2
+dimension=overworld
+spacing=12
+salt=12345
+chance=0.25
+palette.0=minecraft:stone
+block=0,0,0,0
+block=1,0,0,0
 ```
 
-Server starts on port 25565 by default. Edit `server.properties` after first run.
+## Blocks, portals, and persistence
+
+Player digging and placement now update authoritative chunks, broadcast block-change packets, invalidate the network cache, and persist through autosave or `/save-all`. Creative hotbar updates and basic survival stack consumption are supported. Nether portals are no longer generated: build a standard 4x5 obsidian frame and use flint and steel on it; the server detects the completed frame and fills its interior. End Portal Frames can be placed, filled one-by-one with Eyes of Ender, and activate a completed 12-frame ring.
+
+## Operators
+
+`/op <online-player>` and `/deop <online-player>` write UUID-based, vanilla-shaped `ops.json` entries. Operators bypass command permission checks. The server console can bootstrap the first operator.
+
+## Protocol organization
+
+Protocol 340 packet IDs, version metadata, brand channel, and wire constants are centralized in `Protocol340`, reducing version-specific literals in handlers and providing a clear seam for future protocol adapters. The server sends `MC|Brand` with `vib-MC` after login and includes per-column biome bytes in full chunk packets.
+
+## Protocol version model
+
+vib-MC uses Minecraft 1.12.2 semantics and registries while PacketEvents owns handshake version detection and connection-state transitions. Because this custom endpoint accepts multiple wire versions directly, PacketEvents prepares each wrapper against the target `User#getClientVersion()` so packet IDs and version-dependent wrapper layouts match that connection. PacketEvents currently exposes this behavior behind its `ChannelInjector#isProxy()` capability even though vib-MC is not a forwarding proxy; no ViaVersion translation layer is installed. This does not invent semantic translations for concepts vib-MC has not implemented, but supported wrappers are encoded with the target protocol's IDs and layouts. Minecraft 1.16 and 1.16.1 are explicitly rejected because PacketEvents 2.13 reports incorrect clientbound packet IDs for those two releases. Minecraft 1.19.3 is also rejected because PE reads a profile-key field that the release no longer sends. Verified compatibility currently stops at exactly Minecraft 1.20.2. That release completes Login Acknowledged, registry data, enabled features, Update Tags, Finish Configuration, and the transition into Play. Newer releases are not proactively version-kicked, but their later Configuration layouts are not yet implemented or claimed as supported.
+
+## PacketEvents-backed world data
+
+World chunks store PacketEvents `WrappedBlockState` objects directly, and inventories use PacketEvents `ItemStack`/`ItemType` directly. Structure palettes, terrain generation, block interaction, creative inventory updates, durability, `/give`, persistence, and chunk packets all share those semantic objects instead of parallel vib-MC block/item IDs.
+
+A `ServerPlayer` is created immediately for every PacketEvents `User`. Its world, UUID, username, and other not-yet-known login state remain nullable until authentication completes; `isInWorld()` distinguishes active gameplay players. Packet wrappers are created at call sites and sent directly with `User.sendPacket(...)`; there is no pending-connection class, packet facade, or parallel protocol implementation.
+
+Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers. The vendored PrismarineJS minecraft-data snapshots are used only for Java-edition registry/configuration payloads such as the modern Join Game dimension codec. `tools/update-minecraft-data.sh` creates a sparse checkout containing only the required PC `version.json` and `loginPacket.json` snapshots plus their indexes, and Gradle verifies that no unrelated datasets enter the runnable JAR.
+
+## Movement policy
+
+The server intentionally has almost no gameplay anti-cheat. It rejects malformed/non-finite coordinates and performs the same broad kind of lenient floating check used by vanilla 1.12.2: sustained unsupported airtime is allowed for a grace period, with exemptions for flight-enabled, creative, spectator, teleporting, and grounded players. It does not add speed, reach, combat, inventory, or heuristic cheat detection.
+
+## Plugins
+
+vib-MC includes plugin support so servers can be extended without modifying the core server.
+
+Plugins can be used for things such as:
+
+- Commands
+- Gameplay mechanics
+- Events
+- Server utilities
+- Custom features
+
+Plugin files are loaded from:
+
+```text
+plugins/
+```
+
+The project also aims to make plugin creation accessible through a Scratch-style/no-code creator on the website, allowing users to construct simple plugins without having to write code.
 
 ## Commands
 
-`/help`, `/tp`, `/gamemode`, `/time`, `/weather`, `/give`, `/kill`, `/say`, `/seed`, `/save-all`, `/stop`, `/list`
+Current commands include:
+
+```text
+/help
+/tp
+/gamemode
+/time
+/weather
+/give
+/kill
+/say
+/seed
+/save-all
+/save-on
+/save-off
+/stop
+/list
+/op
+/deop
+/kick
+/dimension
+```
 
 ## Architecture
 
+```text
+net.vibmc.server        — server core
+net.vibmc.network       — Minecraft networking
+net.vibmc.world         — world and block systems
+net.vibmc.world.gen     — world generation
+net.vibmc.world.storage — world persistence
+net.vibmc.entity        — entities
+net.vibmc.player        — players
+net.vibmc.plugin        — plugin support
+net.vibmc.command       — commands
+net.vibmc.permission    — permissions
 ```
-net.vibmc.server      — makes it go
-net.vibmc.network     — talks to Minecraft
-net.vibmc.world       — blocks and stuff
-net.vibmc.world.gen   — makes the ground
-net.vibmc.entity      — things that move
-net.vibmc.player      — the people
-net.vibmc.plugin      — mod support
-net.vibmc.command     — slash commands
-net.vibmc.permission  — who can do what
+
+## Requirements
+
+- Java 8 or newer to run the current server/release line
+- JDK 17 or newer to run the Gradle 9.7 build (output bytecode still targets Java 8)
+- Minecraft Java Edition for client testing
+
+For building from source, use the repository's Gradle wrapper when available:
+
+```bash
+./gradlew clean build
 ```
 
-## Version Requirements
+The resulting server JAR is produced under `build/libs/`.
 
-| Status | Version | Requires |
-|:------:|---------|----------|
-| ✅ | v0.0.1 — alpha | Java 21 or newer |
-| ✅ | v0.0.2 — stable | Java 11 or newer |
-| ✅ | v0.0.3 — stable | Java 8 or newer |
-| ✅ | v0.0.4 — stable | Java 8 or newer |
-| ✅ | v0.0.4-hotfix.1 — stable (hotfix applies to all versions) | Java 8 or newer |
-| ✅ | v0.0.4-hotfix.2 — stable (hotfix applies to all versions) | Java 8 or newer |
-| ✅ | v0.0.4-hotfix.3 — stable (hotfix applies to all versions) | Java 8 or newer |
-| ✅ | v0.0.5 — latest, stable | Java 8 or newer |
+With a local server running, the protocol tests can verify terrain streaming and two-player visibility:
 
-Building from source requires **Java 8 or newer** (`options.release = 8`).
+```bash
+cd tools
+npm ci
+npm test
+npm run test:players
+npm run test:dimensions
+```
+
+## Version History
+
+| Status | Version |
+|:------:|---------|
+| ✅ | v0.0.1 — alpha |
+| ✅ | v0.0.2 — stable |
+| ✅ | v0.0.3 — stable |
+| ✅ | v0.0.4 — stable |
+| ✅ | v0.0.4-hotfix.1 |
+| ✅ | v0.0.4-hotfix.2 |
+| 🚀 | **v0.0.4-hotfix.3 — World Persistence** |
+| 🔮 | v0.0.5 — major feature update |
+
+## What's planned for v0.0.5
+
+The next major update is planned to expand the world and player experience with features such as:
+
+- Random and persistent world seeds
+- More varied terrain and hills
+- Trees
+- Ores
+- Caves and cave entrances
+- Biomes such as desert, snow, plains, and forest
+- Generated structures and villages
+- Improved multiplayer functionality
+- Skins
+- Tab list improvements
+- More game mode functionality
+- Nether development
+- Expanded plugin capabilities
+
+Features may be implemented incrementally as development progresses.
 
 ## License
 
-MIT — do whatever you want with this AI-generated mess.
+GPL-3.0-or-later. This project is being relicensed for its PacketEvents-based networking stack. See `LICENSE`.
 
-```
-MIT License
 
-Copyright (c) 2026 vib-MC
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```

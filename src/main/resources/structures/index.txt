@@ -1,0 +1,11 @@
+oak_tree.vstruct
+village/house.vstruct
+village/well.vstruct
+village/farm.vstruct
+village/road_x_segment.vstruct
+village/road_z_segment.vstruct
+village/road_stub.vstruct
+village/road_farm_link.vstruct
+village/houses.vpool
+village/buildings.vpool
+village/spawn_village.vstructure

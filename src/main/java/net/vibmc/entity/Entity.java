@@ -9,15 +9,15 @@ public abstract class Entity {
     private static final AtomicInteger ENTITY_ID_COUNTER = new AtomicInteger(1);
 
     protected final int entityId;
-    protected final UUID uuid;
-    protected World world;
-    protected double x, y, z;
-    protected float yaw, pitch;
-    protected float health;
-    protected float maxHealth;
-    protected boolean alive;
-    protected boolean onGround;
-    protected boolean invulnerable;
+    protected UUID uuid;
+    protected volatile World world;
+    protected volatile double x, y, z;
+    protected volatile float yaw, pitch;
+    protected volatile float health;
+    protected volatile float maxHealth;
+    protected volatile boolean alive;
+    protected volatile boolean onGround;
+    protected volatile boolean invulnerable;
 
     public Entity(World world) {
         this(world, UUID.randomUUID());
@@ -49,17 +49,21 @@ public abstract class Entity {
     public float getPitch() { return pitch; }
 
     public void setPosition(double x, double y, double z) {
+        validatePosition(x, y, z);
         this.x = x;
         this.y = y;
         this.z = z;
     }
 
     public void setRotation(float yaw, float pitch) {
+        validateRotation(yaw, pitch);
         this.yaw = yaw;
         this.pitch = pitch;
     }
 
     public void setPositionAndRotation(double x, double y, double z, float yaw, float pitch) {
+        validatePosition(x, y, z);
+        validateRotation(yaw, pitch);
         this.x = x;
         this.y = y;
         this.z = z;
@@ -67,13 +71,38 @@ public abstract class Entity {
         this.pitch = pitch;
     }
 
+    private static void validatePosition(double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
+                || Math.abs(x) > 30_000_000 || Math.abs(z) > 30_000_000 || Math.abs(y) > 30_000_000) {
+            throw new IllegalArgumentException("Invalid entity position");
+        }
+    }
+
+    private static void validateRotation(float yaw, float pitch) {
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch)) {
+            throw new IllegalArgumentException("Invalid entity rotation");
+        }
+    }
+
     public float getHealth() { return health; }
     public float getMaxHealth() { return maxHealth; }
-    public void setHealth(float health) { this.health = Math.max(0, Math.min(maxHealth, health)); }
-    public void setMaxHealth(float maxHealth) { this.maxHealth = maxHealth; }
+    public void setHealth(float health) {
+        if (!Float.isFinite(health)) {
+            throw new IllegalArgumentException("health must be finite");
+        }
+        this.health = Math.max(0, Math.min(maxHealth, health));
+    }
+
+    public void setMaxHealth(float maxHealth) {
+        if (!Float.isFinite(maxHealth) || maxHealth <= 0) {
+            throw new IllegalArgumentException("maxHealth must be positive and finite");
+        }
+        this.maxHealth = maxHealth;
+        this.health = Math.min(health, maxHealth);
+    }
 
     public void damage(float amount) {
-        if (invulnerable || !alive) return;
+        if (!Float.isFinite(amount) || amount <= 0 || invulnerable || !alive) return;
         health -= amount;
         if (health <= 0) {
             health = 0;
@@ -82,7 +111,7 @@ public abstract class Entity {
     }
 
     public void heal(float amount) {
-        if (!alive) return;
+        if (!Float.isFinite(amount) || amount <= 0 || !alive) return;
         health = Math.min(maxHealth, health + amount);
     }
 
@@ -100,6 +129,10 @@ public abstract class Entity {
 
     protected void onDeath() {
         // Override in subclasses
+    }
+
+    protected void revive() {
+        alive = true;
     }
 
     public void remove() {

@@ -2,18 +2,18 @@ package net.vibmc.command.commands;
 
 import net.vibmc.command.Command;
 import net.vibmc.command.CommandSender;
-import net.vibmc.entity.PlayerEntity;
+import net.vibmc.entity.ServerPlayer;
 import net.vibmc.server.VibMC;
 
 public class TeleportCommand extends Command {
     public TeleportCommand() {
-        super("tp", "Teleport to a player or coordinates", "/tp <player> | /tp <x> <y> <z>", null);
+        super("tp", "Teleport to a player or coordinates", "/tp <player> | /tp <x> <y> <z>", "vibmc.command.tp");
     }
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            PlayerEntity target = VibMC.getInstance().getPlayerManager().getPlayer(args[0]);
+            ServerPlayer target = VibMC.getInstance().getPlayerManager().getPlayer(args[0]);
             if (target == null) {
                 sender.sendMessage("{\"text\":\"§cPlayer not found.\"}");
                 return false;

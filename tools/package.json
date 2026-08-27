@@ -1,0 +1,25 @@
+{
+  "name": "vib-mc-chunk-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "mineflayer test bot for vib-MC chunk rendering (protocol 340 / 1.12.2)",
+  "scripts": {
+    "test": "node chunk-test.js",
+    "test:players": "node player-visibility-test.js",
+    "test:dimensions": "node dimension-test.js",
+    "test:chat": "node chat-test.js",
+    "test:end": "node end-test.js",
+    "test:kick": "node kick-test.js",
+    "test:player-persistence": "node player-persistence-test.js",
+    "test:versions": "node version-compat-test.js"
+  },
+  "dependencies": {
+    "mineflayer": "4.25.0"
+  },
+  "overrides": {
+    "minecraft-protocol": "1.52.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

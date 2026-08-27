@@ -1,18 +1,19 @@
 package net.vibmc.command;
 
-import net.vibmc.entity.PlayerEntity;
+import net.vibmc.entity.ServerPlayer;
+import net.vibmc.network.JsonText;
 import net.vibmc.server.VibMC;
 
 public class CommandSender {
     private final String name;
-    private final PlayerEntity player;
+    private final ServerPlayer player;
 
     public CommandSender(String name) {
         this.name = name;
         this.player = null;
     }
 
-    public CommandSender(PlayerEntity player) {
+    public CommandSender(ServerPlayer player) {
         this.player = player;
         this.name = player.getUsername();
     }
@@ -21,7 +22,7 @@ public class CommandSender {
         return player != null;
     }
 
-    public PlayerEntity getPlayer() {
+    public ServerPlayer getPlayer() {
         return player;
     }
 
@@ -33,7 +34,8 @@ public class CommandSender {
         if (player != null) {
             player.sendMessage(message);
         } else {
-            VibMC.getInstance().getLogger().info(message);
+            String plain = JsonText.toConsoleText(message).replaceAll("§[0-9A-FK-ORa-fk-or]", "");
+            VibMC.getInstance().getLogger().info("%s", plain);
         }
     }
 }

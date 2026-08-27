@@ -1,14 +1,9 @@
 package net.vibmc.network.handler;
 
-import net.vibmc.network.ClientConnection;
-import net.vibmc.network.PacketBuffer;
+import net.vibmc.entity.ServerPlayer;
 
+/** Lifecycle hook retained while PacketEvents listeners own packet processing. */
 public interface PacketHandler {
-    default void onConnect(ClientConnection connection) {
-    }
-
-    default void onDisconnect(ClientConnection connection, String reason) {
-    }
-
-    void handle(ClientConnection connection, int packetId, PacketBuffer buffer);
+    default void onConnect(ServerPlayer connection) {}
+    default void onDisconnect(ServerPlayer connection, String reason) {}
 }

@@ -6,14 +6,15 @@ import net.vibmc.world.storage.WorldStorage;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class ChunkManager {
+/** Thread-safe cache that loads, generates, and persists chunks for one world. */
+public final class ChunkManager {
     private final World world;
     private final WorldStorage storage;
-    private final Map<Long, Chunk> loadedChunks = new LinkedHashMap<>();
+    private final Map<Long, WorldChunk> loadedChunks = new ConcurrentHashMap<>();
 
     public ChunkManager(World world) {
         this(world, world.storage());
@@ -24,54 +25,35 @@ public class ChunkManager {
         this.storage = storage;
     }
 
-    /**
-     * Returns the chunk at the given coordinates, loading it from disk if it has been
-     * saved before and generating fresh terrain only when it has not.
-     */
-    public Chunk getChunk(int chunkX, int chunkZ) {
-        long key = key(chunkX, chunkZ);
-        synchronized (loadedChunks) {
-            Chunk chunk = loadedChunks.get(key);
-            if (chunk == null) {
-                chunk = loadOrGenerate(chunkX, chunkZ);
-                loadedChunks.put(key, chunk);
-            }
-            return chunk;
-        }
+    public WorldChunk getChunk(int chunkX, int chunkZ) {
+        long key = chunkKey(chunkX, chunkZ);
+        return loadedChunks.computeIfAbsent(key, ignored -> loadOrGenerate(chunkX, chunkZ));
     }
 
-    private Chunk loadOrGenerate(int chunkX, int chunkZ) {
+    private WorldChunk loadOrGenerate(int chunkX, int chunkZ) {
         try {
-            short[] stored = storage.readChunk(chunkX, chunkZ);
+            com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] stored = storage.readChunk(chunkX, chunkZ);
             if (stored != null) {
-                return Chunk.fromStored(world, chunkX, chunkZ, stored);
+                return WorldChunk.fromStored(world, chunkX, chunkZ, stored);
             }
         } catch (IOException e) {
             warn("Could not read chunk %d,%d (%s); regenerating it", chunkX, chunkZ, e.getMessage());
         }
-        return Chunk.generate(world, chunkX, chunkZ);
+        return WorldChunk.generate(world, chunkX, chunkZ);
     }
 
-    public List<Chunk> listLoadedChunks() {
-        synchronized (loadedChunks) {
-            return new ArrayList<>(loadedChunks.values());
-        }
+    public List<WorldChunk> listLoadedChunks() {
+        return new ArrayList<>(loadedChunks.values());
     }
 
     public int getLoadedChunkCount() {
-        synchronized (loadedChunks) {
-            return loadedChunks.size();
-        }
+        return loadedChunks.size();
     }
 
-    /**
-     * Writes every loaded chunk that has unsaved changes.
-     *
-     * @return the number of chunks written
-     */
+    /** Writes every loaded chunk that has unsaved changes. */
     public int saveAll() {
         int written = 0;
-        for (Chunk chunk : listLoadedChunks()) {
+        for (WorldChunk chunk : listLoadedChunks()) {
             if (!chunk.isDirty()) {
                 continue;
             }
@@ -86,10 +68,9 @@ public class ChunkManager {
         return written;
     }
 
-    /** Number of loaded chunks with changes that are not on disk yet. */
     public int getUnsavedChunkCount() {
         int dirty = 0;
-        for (Chunk chunk : listLoadedChunks()) {
+        for (WorldChunk chunk : listLoadedChunks()) {
             if (chunk.isDirty()) {
                 dirty++;
             }
@@ -97,16 +78,13 @@ public class ChunkManager {
         return dirty;
     }
 
-    private static long key(int chunkX, int chunkZ) {
-        return (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
+    private static long chunkKey(int chunkX, int chunkZ) {
+        return ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
     }
 
     private static void warn(String message, Object... args) {
         VibMC server = VibMC.getInstance();
-        if (server == null) {
-            return;
-        }
-        Logger logger = server.getLogger();
+        Logger logger = server == null ? null : server.getLogger();
         if (logger != null) {
             logger.warn(message, args);
         }

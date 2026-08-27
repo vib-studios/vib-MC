@@ -3,30 +3,21 @@ package net.vibmc.server.util;
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
-public class Logger {
-    /**
-     * Whether debug lines are printed at all.
-     *
-     * <p>Static because the logger is built before the config is read, and because a
-     * console you cannot type into for the packet chatter is not a console.
-     */
-    private static volatile boolean debugEnabled;
-
+/** Small synchronized console logger suitable for the server's worker threads. */
+public final class Logger {
     private final String name;
-    private final SimpleDateFormat timestampFormat = new SimpleDateFormat("HH:mm:ss");
+    private final boolean debugEnabled;
+    private final SimpleDateFormat timestampFormat = new SimpleDateFormat("HH:mm:ss", Locale.ROOT);
 
     public Logger(String name) {
+        this(name, false);
+    }
+
+    public Logger(String name, boolean debugEnabled) {
         this.name = name;
-    }
-
-    /** Turns the debug channel on, from the {@code log-level} setting. */
-    public static void setDebugEnabled(boolean enabled) {
-        debugEnabled = enabled;
-    }
-
-    public static boolean isDebugEnabled() {
-        return debugEnabled;
+        this.debugEnabled = debugEnabled;
     }
 
     public void info(String format, Object... args) {
@@ -42,17 +33,16 @@ public class Logger {
     }
 
     public void debug(String format, Object... args) {
-        if (!debugEnabled) {
-            return;
+        if (debugEnabled) {
+            log("DEBUG", System.out, format, args);
         }
-        log("DEBUG", System.out, format, args);
     }
 
-    private void log(String level, PrintStream out, String format, Object... args) {
+    private synchronized void log(String level, PrintStream out, String format, Object... args) {
         String message;
         try {
-            message = String.format(format, args);
-        } catch (Exception e) {
+            message = String.format(Locale.ROOT, format, args);
+        } catch (RuntimeException ignored) {
             message = format;
         }
         out.println("[" + timestampFormat.format(new Date()) + "] [" + level + "] [" + name + "] " + message);

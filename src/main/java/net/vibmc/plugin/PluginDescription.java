@@ -1,5 +1,7 @@
 package net.vibmc.plugin;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class PluginDescription {
@@ -15,8 +17,8 @@ public class PluginDescription {
         this.name = name;
         this.version = version;
         this.main = main;
-        this.authors = authors;
-        this.depends = depends;
+        this.authors = Collections.unmodifiableList(new ArrayList<>(authors));
+        this.depends = Collections.unmodifiableList(new ArrayList<>(depends));
         this.description = description;
     }
 

@@ -1,10 +1,7 @@
 package net.vibmc.world;
 
 import net.vibmc.entity.Entity;
-import net.vibmc.world.gen.ChunkGenerator;
-import net.vibmc.world.gen.EndGenerator;
-import net.vibmc.world.gen.NetherGenerator;
-import net.vibmc.world.gen.OverworldGenerator;
+import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
 import net.vibmc.world.storage.WorldStorage;
 
 import java.util.ArrayList;
@@ -15,77 +12,38 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class World {
     private final long seed;
     private final String name;
-    private final Dimension dimension;
-    private final ChunkGenerator generator;
     private final ChunkManager chunkManager;
     private final TimeSystem timeSystem;
     private final WeatherSystem weatherSystem;
     private final WorldStorage storage;
+    private final WorldEnvironment environment;
     private final List<Entity> entities = new CopyOnWriteArrayList<>();
-    private long worldTime;
+    private volatile long worldTime;
 
     public World(long seed, String name) {
-        this(seed, name, Dimension.OVERWORLD, new WorldStorage(name));
+        this(seed, name, new WorldStorage(name), WorldEnvironment.OVERWORLD);
     }
 
     public World(long seed, String name, WorldStorage storage) {
-        this(seed, name, Dimension.OVERWORLD, storage);
+        this(seed, name, storage, WorldEnvironment.OVERWORLD);
     }
 
-    public World(long seed, String name, Dimension dimension, WorldStorage storage) {
+    public World(long seed, String name, WorldStorage storage, WorldEnvironment environment) {
         this.seed = seed;
         this.name = name;
-        this.dimension = dimension;
         this.storage = storage;
-        this.generator = generatorFor(dimension);
+        this.environment = environment;
         this.timeSystem = new TimeSystem();
         this.weatherSystem = new WeatherSystem();
         this.chunkManager = new ChunkManager(this, storage);
     }
 
-    private static ChunkGenerator generatorFor(Dimension dimension) {
-        switch (dimension) {
-            case NETHER:
-                return new NetherGenerator();
-            case END:
-                return new EndGenerator();
-            default:
-                return new OverworldGenerator();
-        }
-    }
-
-    public Dimension dimension() {
-        return dimension;
-    }
-
-    public ChunkGenerator generator() {
-        return generator;
-    }
-
-    public Chunk chunk(int chunkX, int chunkZ) {
+    public WorldChunk chunk(int chunkX, int chunkZ) {
         return chunkManager.getChunk(chunkX, chunkZ);
     }
 
-    public Chunk getChunk(int chunkX, int chunkZ) {
+    public WorldChunk getChunk(int chunkX, int chunkZ) {
         return chunk(chunkX, chunkZ);
-    }
-
-    /** Reads a block by absolute world coordinates, loading the chunk if needed. */
-    public short getBlock(int x, int y, int z) {
-        if (y < 0 || y >= Chunk.WORLD_HEIGHT) {
-            return Block.AIR.id();
-        }
-        return chunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16))
-                .getBlock(Math.floorMod(x, 16), y, Math.floorMod(z, 16));
-    }
-
-    /** Writes a block by absolute world coordinates, loading the chunk if needed. */
-    public void setBlock(int x, int y, int z, short id) {
-        if (y < 0 || y >= Chunk.WORLD_HEIGHT) {
-            return;
-        }
-        chunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16))
-                .setBlock(Math.floorMod(x, 16), y, Math.floorMod(z, 16), id);
     }
 
     public void tick(long tick) {
@@ -111,25 +69,52 @@ public class World {
         return Collections.unmodifiableList(entities);
     }
 
+    public WrappedBlockState getBlockAt(int x, int y, int z) {
+        if (y < 0 || y >= 256) return Blocks.AIR;
+        return chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16))
+                .getBlock(Math.floorMod(x, 16), y, Math.floorMod(z, 16));
+    }
+
+    public boolean setBlockAt(int x, int y, int z, WrappedBlockState block) {
+        if (y < 0 || y >= 256) return false;
+        WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        int localX = Math.floorMod(x, 16);
+        int localZ = Math.floorMod(z, 16);
+        if (Blocks.same(chunk.getBlock(localX, y, localZ), block)) return false;
+        chunk.setBlock(localX, y, localZ, block);
+        return true;
+    }
+
     public int getHighestBlockY(int x, int z) {
-        Chunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
         int localX = Math.floorMod(x, 16);
         int localZ = Math.floorMod(z, 16);
         for (int y = 255; y >= 0; y--) {
-            if (chunk.getBlock(localX, y, localZ) != Block.AIR.id()) {
+            if (!Blocks.same(chunk.getBlock(localX, y, localZ), Blocks.AIR)) {
                 return y;
             }
         }
         return 0;
     }
 
+    public int getTerrainSurfaceY(int x, int z) {
+        WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        int localX = Math.floorMod(x, 16), localZ = Math.floorMod(z, 16);
+        for (int y = 255; y >= 0; y--) {
+            WrappedBlockState id = chunk.getBlock(localX, y, localZ);
+            if (!Blocks.same(id, Blocks.AIR) && !Blocks.same(id, Blocks.WATER) && !Blocks.same(id, Blocks.LAVA)
+                    && !Blocks.same(id, Blocks.WOOD) && !Blocks.same(id, Blocks.LEAVES)) return y;
+        }
+        return 0;
+    }
+
     public int getHighestSolidY(int x, int z) {
-        Chunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
         int localX = Math.floorMod(x, 16);
         int localZ = Math.floorMod(z, 16);
         for (int y = 255; y >= 0; y--) {
-            short id = chunk.getBlock(localX, y, localZ);
-            if (id != Block.AIR.id() && id != Block.WATER.id() && id != Block.LAVA.id()) {
+            WrappedBlockState id = chunk.getBlock(localX, y, localZ);
+            if (!Blocks.same(id, Blocks.AIR) && !Blocks.same(id, Blocks.WATER) && !Blocks.same(id, Blocks.LAVA)) {
                 return y;
             }
         }
@@ -138,29 +123,65 @@ public class World {
 
     /** Finds the nearest dry-land spawn column within radius, starting from (x, z). */
     public int[] findDrySpawn(int x, int z, int radius) {
-        int best = -1;
-        int bestDist = Integer.MAX_VALUE;
+        if (radius < 0) {
+            throw new IllegalArgumentException("radius cannot be negative");
+        }
+        int bestX = x;
+        int bestZ = z;
+        int bestDistance = Integer.MAX_VALUE;
         for (int dz = -radius; dz <= radius; dz++) {
             for (int dx = -radius; dx <= radius; dx++) {
-                int wx = x + dx;
-                int wz = z + dz;
-                if (getHighestSolidY(wx, wz) >= getSeaLevel() && getHighestBlockY(wx, wz) < 256) {
-                    int dist = dx * dx + dz * dz;
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        best = (wx << 16) | (wz & 0xFFFF);
+                int worldX = x + dx;
+                int worldZ = z + dz;
+                int surfaceY = getTerrainSurfaceY(worldX, worldZ);
+                if (surfaceY >= getSeaLevel()
+                        && Blocks.same(getBlockAt(worldX, surfaceY + 1, worldZ), Blocks.AIR)
+                        && Blocks.same(getBlockAt(worldX, surfaceY + 2, worldZ), Blocks.AIR)) {
+                    int distance = dx * dx + dz * dz;
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestX = worldX;
+                        bestZ = worldZ;
                     }
                 }
             }
         }
-        if (best < 0) return new int[]{x, z};
-        int sx = best >> 16;
-        int sz = (short) (best & 0xFFFF);
-        return new int[]{sx, sz};
+        return new int[]{bestX, bestZ};
+    }
+
+    public int findSafeSpawnY(int x, int z) {
+        if (environment != WorldEnvironment.NETHER) {
+            return getHighestSolidY(x, z) + 1;
+        }
+        WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        int localX = Math.floorMod(x, 16);
+        int localZ = Math.floorMod(z, 16);
+        for (int y = 100; y >= 2; y--) {
+            WrappedBlockState floor = chunk.getBlock(localX, y, localZ);
+            if (!Blocks.same(floor, Blocks.AIR) && !Blocks.same(floor, Blocks.LAVA)
+                    && Blocks.same(chunk.getBlock(localX, y + 1, localZ), Blocks.AIR)
+                    && Blocks.same(chunk.getBlock(localX, y + 2, localZ), Blocks.AIR)) {
+                return y + 1;
+            }
+        }
+        return 65;
+    }
+
+    public String biomeAt(int x, int z) {
+        if (environment == WorldEnvironment.NETHER) return "minecraft:nether_wastes";
+        if (environment == WorldEnvironment.END) return "minecraft:the_end";
+        net.vibmc.world.gen.TerrainGenerator terrain = new net.vibmc.world.gen.TerrainGenerator(seed);
+        if (terrain.getHeight(x, z) < 62) return "minecraft:ocean";
+        double climate = terrain.fbm(x * 0.0017, z * 0.0017, 3);
+        double moisture = terrain.fbm(x * 0.0021 + 500, z * 0.0021 - 500, 3);
+        if (climate > 0.38 && moisture < -0.05) return "minecraft:desert";
+        if (climate < -0.35) return "minecraft:taiga";
+        if (moisture > 0.2) return "minecraft:forest";
+        return "minecraft:plains";
     }
 
     public int getSeaLevel() {
-        return dimension.seaLevel();
+        return environment == WorldEnvironment.OVERWORLD ? 63 : 32;
     }
 
     public long seed() {
@@ -181,6 +202,10 @@ public class World {
 
     public WorldStorage storage() {
         return storage;
+    }
+
+    public WorldEnvironment environment() {
+        return environment;
     }
 
     public long getDayTime() {

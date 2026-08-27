@@ -1,163 +1,63 @@
 package net.vibmc.network;
 
-import net.vibmc.network.handler.HandshakeHandler;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.ConnectionState;
+import com.github.retrooper.packetevents.protocol.player.User;
+import com.github.retrooper.packetevents.protocol.player.UserProfile;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import net.vibmc.network.packetevents.codec.*;
+import net.vibmc.entity.ServerPlayer;
 import net.vibmc.server.VibMC;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NetworkServer {
-    private ServerSocketChannel serverChannel;
-    private Selector selector;
-    private final Map<SocketChannel, ClientConnection> connections;
+public final class NetworkServer {
+    private final Map<ChannelId,ServerPlayer> connections=new ConcurrentHashMap<>();
+    private EventLoopGroup bossGroup,workerGroup;
+    private Channel serverChannel;
     private volatile boolean running;
-    private Thread networkThread;
-    private final ByteBuffer readBuffer;
 
-    public NetworkServer() {
-        this.connections = new ConcurrentHashMap<>();
-        this.readBuffer = ByteBuffer.allocateDirect(65536);
+    public void start(String address,int port) throws java.io.IOException {
+        if(running)throw new IllegalStateException("Network server already running");
+        bossGroup=new NioEventLoopGroup(1);workerGroup=new NioEventLoopGroup();
+        try{
+            ServerBootstrap bootstrap=new ServerBootstrap();
+            bootstrap.group(bossGroup,workerGroup).channel(NioServerSocketChannel.class)
+                    .option(ChannelOption.SO_BACKLOG,128).childOption(ChannelOption.TCP_NODELAY,true)
+                    .childOption(ChannelOption.SO_KEEPALIVE,true)
+                    .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,new WriteBufferWaterMark(8<<20,32<<20))
+                    .childHandler(new ChannelInitializer<SocketChannel>(){protected void initChannel(SocketChannel channel){initializeChannel(channel);}});
+            serverChannel=bootstrap.bind(new InetSocketAddress(address,port)).syncUninterruptibly().channel();running=true;
+        }catch(RuntimeException error){shutdownGroups();throw error;}
     }
 
-    public void start(String address, int port) throws IOException {
-        selector = Selector.open();
-        serverChannel = ServerSocketChannel.open();
-        serverChannel.configureBlocking(false);
-        serverChannel.bind(new InetSocketAddress(address, port));
-        serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-        running = true;
+    private void initializeChannel(SocketChannel channel) {
+        // PacketEvents' internal listener learns the client version and next state from handshake.
+        User user=new User(channel,ConnectionState.HANDSHAKING,null,new UserProfile(null,null));
+        // Register through PacketEvents' public lifecycle API so its internal listener can own
+        // client-version detection, protocol state, profiles, and channel mappings.
+        PacketEvents.getAPI().getProtocolManager().setUser(channel,user);
+        ServerPlayer connection=new ServerPlayer(user);
+        connection.setHandler(new net.vibmc.network.handler.HandshakeHandler());
+        connections.put(channel.id(),connection);
+        channel.closeFuture().addListener(future->remove(connection,"Connection closed"));
 
-        networkThread = new Thread(this::networkLoop, "Network Thread");
-        networkThread.setDaemon(true);
-        networkThread.start();
+            channel.pipeline().addLast("packet_splitter",new PacketSplitter())
+                    .addLast(PacketEvents.DECODER_NAME,new PacketEventsDecoder(user,connection))
+                    .addLast("packet_formatter",new PacketFormatter())
+                    .addLast(PacketEvents.ENCODER_NAME,new PacketEventsEncoder(user,connection));
     }
 
-    private void networkLoop() {
-        while (running) {
-            try {
-                int selected = selector.select(50);
-                if (selected == 0) {
-                    continue;
-                }
-                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-                while (keyIterator.hasNext()) {
-                    SelectionKey key = keyIterator.next();
-                    keyIterator.remove();
-                    if (!key.isValid()) continue;
-
-                    try {
-                        if (key.isAcceptable()) {
-                            handleAccept(key);
-                        } else if (key.isReadable()) {
-                            handleRead(key);
-                        } else if (key.isWritable()) {
-                            handleWrite(key);
-                        }
-                    } catch (IOException e) {
-                        closeConnection(key);
-                    }
-                }
-            } catch (ClosedSelectorException e) {
-                break;
-            } catch (IOException e) {
-                VibMC.getInstance().getLogger().severe("Network error: %s", e.getMessage());
-            }
-        }
-    }
-
-    private void handleAccept(SelectionKey key) throws IOException {
-        ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
-        SocketChannel client = serverChannel.accept();
-        VibMC.getInstance().getLogger().debug("Accepted client from %s", client.getRemoteAddress());
-        client.configureBlocking(false);
-        client.socket().setTcpNoDelay(true);
-        SelectionKey clientKey = client.register(selector, SelectionKey.OP_READ);
-        ClientConnection connection = new ClientConnection(client, clientKey);
-        connection.setHandler(new HandshakeHandler());
-        connections.put(client, connection);
-        clientKey.attach(connection);
-        connection.getHandler().onConnect(connection);
-    }
-
-    private void handleRead(SelectionKey key) throws IOException {
-        SocketChannel channel = (SocketChannel) key.channel();
-        ClientConnection connection = connections.get(channel);
-        if (connection == null) return;
-
-        readBuffer.clear();
-        int bytesRead = channel.read(readBuffer);
-        if (bytesRead == -1) {
-            closeConnection(key);
-            return;
-        }
-        if (bytesRead == 0) return;
-
-        readBuffer.flip();
-        byte[] data = new byte[bytesRead];
-        readBuffer.get(data);
-        VibMC.getInstance().getLogger().debug("Read %d bytes from %s", bytesRead, connection.getUsername() != null ? connection.getUsername() : "client");
-        connection.feed(data);
-    }
-
-    private void handleWrite(SelectionKey key) throws IOException {
-        SocketChannel channel = (SocketChannel) key.channel();
-        ClientConnection connection = connections.get(channel);
-        if (connection == null) return;
-
-        if (connection.flushWrites()) {
-            key.interestOps(SelectionKey.OP_READ);
-        }
-    }
-
-    private void closeConnection(SelectionKey key) {
-        if (key == null) return;
-        SocketChannel channel = (SocketChannel) key.channel();
-        ClientConnection connection = connections.remove(channel);
-        if (connection != null) {
-            String reason = "Connection closed";
-            if (connection.getHandler() != null) {
-                connection.getHandler().onDisconnect(connection, reason);
-            }
-            connection.forceClose();
-        } else {
-            try {
-                key.cancel();
-                channel.close();
-            } catch (IOException e) {
-                // ignore
-            }
-        }
-    }
-
-    public void stop() {
-        running = false;
-        for (ClientConnection conn : new ArrayList<>(connections.values())) {
-            if (conn.getHandler() != null) {
-                conn.getHandler().onDisconnect(conn, "Server shutting down");
-            }
-            conn.forceClose();
-        }
-        connections.clear();
-        try {
-            if (selector != null) selector.close();
-            if (serverChannel != null) serverChannel.close();
-        } catch (IOException e) {
-            // ignore
-        }
-    }
-
-    public void tick() {
-    }
-
-    public int getOnlineCount() {
-        return connections.size();
-    }
-
-    public Collection<ClientConnection> getConnections() {
-        return Collections.unmodifiableCollection(connections.values());
-    }
+    private void remove(ServerPlayer connection,String reason){if(connections.remove(connection.channel().id(),connection)){if(connection.getHandler()!=null)try{connection.getHandler().onDisconnect(connection,reason);}catch(RuntimeException error){VibMC.getInstance().getLogger().warn("Disconnect handler failed: %s",error);}if(!(connection.getHandler() instanceof net.vibmc.network.handler.PlayHandler))PacketEvents.getAPI().getProtocolManager().removeUser(connection.channel());}connection.forceClose();}
+    public void stop(){if(!running&&serverChannel==null)return;running=false;String message=VibMC.getInstance().getConfig().shutdownMessage();for(ServerPlayer c:new ArrayList<>(connections.values())){c.disconnect(message);remove(c,message);}connections.clear();if(serverChannel!=null){serverChannel.close().syncUninterruptibly();serverChannel=null;}shutdownGroups();}
+    private void shutdownGroups(){if(workerGroup!=null){workerGroup.shutdownGracefully().syncUninterruptibly();workerGroup=null;}if(bossGroup!=null){bossGroup.shutdownGracefully().syncUninterruptibly();bossGroup=null;}}
+    public void tick(){for(ServerPlayer c:connections.values())if(!c.isOpen())remove(c,"Connection closed");}
+    public int getOnlineCount(){return connections.size();}
+    public Collection<ServerPlayer> getConnections(){return Collections.unmodifiableCollection(new ArrayList<>(connections.values()));}
 }

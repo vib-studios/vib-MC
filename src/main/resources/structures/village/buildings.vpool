@@ -1,0 +1,3 @@
+name=minecraft:village/buildings
+# A pool may reference another pool; resolution is recursive and depth-limited.
+entry=1,minecraft:village/houses

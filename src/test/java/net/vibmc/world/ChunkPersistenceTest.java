@@ -23,7 +23,7 @@ class ChunkPersistenceTest {
     @Test
     void generatedChunkIsDirtyAndSavesOnce(@TempDir Path dir) {
         World world = worldIn(dir);
-        Chunk chunk = world.getChunk(0, 0);
+        WorldChunk chunk = world.getChunk(0, 0);
 
         assertTrue(chunk.isDirty(), "a freshly generated chunk has never been written");
         assertEquals(1, world.chunkManager().saveAll());
@@ -34,15 +34,15 @@ class ChunkPersistenceTest {
     @Test
     void placedBlocksSurviveAReload(@TempDir Path dir) {
         World first = worldIn(dir);
-        Chunk chunk = first.getChunk(3, -2);
-        short generated = chunk.getBlock(9, 0, 9);
-        chunk.setBlock(5, 40, 7, Block.CHEST.id());
+        WorldChunk chunk = first.getChunk(3, -2);
+        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState generated = chunk.getBlock(9, 0, 9);
+        chunk.setBlock(5, 40, 7, Blocks.CHEST);
         first.chunkManager().saveAll();
 
         World reloaded = worldIn(dir);
-        Chunk restored = reloaded.getChunk(3, -2);
+        WorldChunk restored = reloaded.getChunk(3, -2);
 
-        assertEquals(Block.CHEST.id(), restored.getBlock(5, 40, 7));
+        assertEquals(Blocks.CHEST, restored.getBlock(5, 40, 7));
         assertEquals(generated, restored.getBlock(9, 0, 9), "generated terrain is preserved too");
         assertFalse(restored.isDirty(), "a chunk read from disk starts clean");
     }
@@ -50,9 +50,9 @@ class ChunkPersistenceTest {
     @Test
     void chunkNotOnDiskIsStillGenerated(@TempDir Path dir) {
         World world = worldIn(dir);
-        Chunk chunk = world.getChunk(64, 64);
+        WorldChunk chunk = world.getChunk(64, 64);
 
-        assertEquals(Block.BEDROCK.id(), chunk.getBlock(0, 0, 0));
+        assertEquals(Blocks.BEDROCK, chunk.getBlock(0, 0, 0));
         assertTrue(chunk.isDirty());
     }
 
@@ -66,25 +66,25 @@ class ChunkPersistenceTest {
         java.nio.file.Files.write(region, new byte[]{1, 2, 3});
 
         World reloaded = worldIn(dir);
-        Chunk chunk = reloaded.getChunk(1, 1);
+        WorldChunk chunk = reloaded.getChunk(1, 1);
 
-        assertEquals(Block.BEDROCK.id(), chunk.getBlock(0, 0, 0),
+        assertEquals(Blocks.BEDROCK, chunk.getBlock(0, 0, 0),
                 "a damaged chunk regenerates instead of taking the server down");
     }
 
     @Test
     void setBlockOnlyMarksDirtyWhenSomethingChanges(@TempDir Path dir) {
         World world = worldIn(dir);
-        Chunk chunk = world.getChunk(0, 0);
+        WorldChunk chunk = world.getChunk(0, 0);
         world.chunkManager().saveAll();
         assertFalse(chunk.isDirty());
 
-        short existing = chunk.getBlock(4, 0, 4);
+        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState existing = chunk.getBlock(4, 0, 4);
         chunk.setBlock(4, 0, 4, existing);
         assertFalse(chunk.isDirty(), "rewriting the same block is not a change");
 
-        assertNotEquals(Block.LAVA.id(), existing);
-        chunk.setBlock(4, 0, 4, Block.LAVA.id());
+        assertNotEquals(Blocks.LAVA, existing);
+        chunk.setBlock(4, 0, 4, Blocks.LAVA);
         assertTrue(chunk.isDirty());
     }
 

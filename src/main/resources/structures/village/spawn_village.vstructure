@@ -1,0 +1,26 @@
+name=minecraft:spawn_village
+dimension=overworld
+search-radius=64
+footprint-radius=34
+spawn-offset=0,-8
+salt=913733
+exclude-structures=minecraft:oak_tree
+# Node coordinates identify the piece anchor relative to the composite center.
+# The central +/-3 area is reserved for the well; roads never overlap its water.
+node=minecraft:village/road_x_segment,-12,0,0,surface,0
+node=minecraft:village/road_x_segment,12,0,0,surface,0
+node=minecraft:village/road_z_segment,0,0,-12,surface,0
+node=minecraft:village/road_z_segment,0,0,12,surface,0
+# Every house doorway gets a dedicated road stub ending on the main east-west road.
+node=minecraft:village/road_stub,-14,0,-11,surface,0
+node=minecraft:village/road_stub,14,0,-11,surface,0
+node=minecraft:village/road_stub,-14,0,11,surface,180
+node=minecraft:village/road_stub,14,0,11,surface,180
+node=minecraft:village/buildings,-14,0,-14,terrain,0
+node=minecraft:village/buildings,14,0,-14,terrain,0
+node=minecraft:village/buildings,-14,0,14,terrain,180
+node=minecraft:village/buildings,14,0,14,terrain,180
+node=minecraft:village/well,0,0,0,terrain,0
+# The farm is outside the road cross and has its own short entrance link.
+node=minecraft:village/road_farm_link,0,0,20,surface,0
+node=minecraft:village/farm,0,0,28,terrain,0

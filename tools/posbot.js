@@ -1,0 +1,8 @@
+const mc = require('minecraft-protocol')
+const client = mc.createClient({ host: '127.0.0.1', port: 25565, username: 'posbot', version: '1.12.2' })
+client.on('error', e => console.log('client error:', e.message))
+client.on('login', () => console.log('LOGIN OK'))
+client.on('position', (p) => console.log('POSITION:', JSON.stringify(p)))
+client.on('spawn_position', (p) => console.log('SPAWN_POSITION:', JSON.stringify(p)))
+client.on('map_chunk', () => {})
+setTimeout(() => { console.log('done'); process.exit(0) }, 8000)

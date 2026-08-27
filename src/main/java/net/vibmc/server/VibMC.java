@@ -1,16 +1,18 @@
 package net.vibmc.server;
 
-import net.vibmc.auth.ServerKeyPair;
-import net.vibmc.auth.SessionAuthenticator;
 import net.vibmc.command.CommandManager;
+import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.NetworkServer;
 import net.vibmc.player.PlayerManager;
+import net.vibmc.permission.OperatorManager;
 import net.vibmc.plugin.PluginManager;
 import net.vibmc.server.util.Logger;
 import net.vibmc.world.WorldManager;
 
 import java.io.IOException;
-import java.io.Console;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class VibMC {
     private static VibMC instance;
@@ -22,40 +24,59 @@ public final class VibMC {
     private final PlayerManager playerManager;
     private final NetworkServer networkServer;
     private final CommandManager commandManager;
-    private final ServerKeyPair keyPair;
-    private final SessionAuthenticator sessionAuthenticator;
+    private final OperatorManager operatorManager;
 
     private volatile boolean running;
-    /** Guards shutdown so it runs exactly once and to completion, whoever triggers it. */
-    private final Object stopLock = new Object();
-    private volatile boolean stopping;
+    private volatile boolean pluginsEnabled;
+    private static final int MAX_QUEUED_MAIN_THREAD_TASKS = 65536;
+    private static final int MAX_MAIN_THREAD_TASKS_PER_TICK = 10000;
+
+    private volatile boolean automaticSaving = true;
+    private final Queue<Runnable> mainThreadTasks = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger queuedMainThreadTaskCount = new AtomicInteger();
+    private volatile Thread tickThread;
     private long tickCounter;
 
-    private VibMC() {
+    private VibMC(ServerConfig config) throws IOException {
         instance = this;
-        this.config = ServerConfig.load("server.properties");
-        this.logger = new Logger("vib-MC");
+        this.config = config;
+        this.logger = new Logger("vib-MC", config.debug());
+        if (config.generateStructures()) {
+            try {
+                net.vibmc.world.structure.StructureRegistry.reload();
+            } catch (IOException e) {
+                logger.warn("Could not load structure templates: %s", e);
+                net.vibmc.world.structure.StructureRegistry.clear();
+            }
+        } else {
+            net.vibmc.world.structure.StructureRegistry.clear();
+        }
         this.worldManager = new WorldManager(config);
         this.pluginManager = new PluginManager();
         this.playerManager = new PlayerManager();
         this.networkServer = new NetworkServer();
+        this.operatorManager = new OperatorManager(java.nio.file.Paths.get("ops.json"));
         this.commandManager = new CommandManager();
-        this.keyPair = new ServerKeyPair();
-        this.sessionAuthenticator = new SessionAuthenticator();
-    }
-
-    /** RSA identity used for the online-mode login handshake. */
-    public ServerKeyPair getKeyPair() {
-        return keyPair;
-    }
-
-    public SessionAuthenticator getSessionAuthenticator() {
-        return sessionAuthenticator;
     }
 
     public static void main(String[] args) {
-        VibMC server = new VibMC();
-        server.start();
+        // New JDKs warn that Netty's sun.misc.Unsafe allocation path is terminally deprecated.
+        // Prefer the supported allocator path; this must be set before PacketEvents loads Netty.
+        if (System.getProperty("io.netty.noUnsafe") == null) {
+            System.setProperty("io.netty.noUnsafe", "true");
+        }
+        try {
+            ServerConfig config = ServerConfig.load("server.properties");
+            if (config.useLegacyProxyForwarding() && !config.onlineMode()) {
+                throw new IOException("proxy-mode=legacy requires online-mode=true");
+            }
+            net.vibmc.registry.MinecraftDataRegistry.initialize();
+            net.vibmc.network.packetevents.PacketEventsRuntime.initialize();
+            new VibMC(config).start();
+        } catch (IOException e) {
+            System.err.println("Unable to start vib-MC: " + e.getMessage());
+            System.exit(1);
+        }
     }
 
     public static VibMC getInstance() {
@@ -64,16 +85,6 @@ public final class VibMC {
 
     public void start() {
         running = true;
-        net.vibmc.server.util.Logger.setDebugEnabled(config.debugLogging());
-        if (!Eula.accepted(logger)) {
-            running = false;
-            return;
-        }
-        if (!checkSecurityConfig()) {
-            running = false;
-            return;
-        }
-        maybePromptSkinPlugin();
         try {
             networkServer.start(config.address(), config.port());
         } catch (IOException e) {
@@ -82,114 +93,70 @@ public final class VibMC {
             return;
         }
 
-        // No portal is handed out at spawn - the way into the Nether is a frame the player
-        // builds and lights themselves. The End's exit portal is different: it is the only
-        // way back out, so it is made sure of here, including for saves made before it
-        // existed. Existing terrain is otherwise untouched.
-        net.vibmc.world.PortalTravel.ensureEndExitPortal(worldManager.getEnd());
-
+        if (!config.onlineMode()) {
+            logger.warn("Running in offline mode: player identities are not authenticated. Do not expose this server publicly.");
+        } else if (config.useLegacyProxyForwarding()) {
+            logger.info("Online mode is delegated to a trusted legacy-compatible BungeeCord/Velocity proxy at %s",
+                    config.proxyTrustedAddress());
+        } else {
+            logger.info("Online mode enabled with encrypted Mojang session authentication");
+        }
         pluginManager.loadPlugins("plugins");
         pluginManager.onLoad();
         pluginManager.onEnable();
-
+        pluginsEnabled = true;
         commandManager.startConsole();
 
-        Thread tickThread = new Thread(this::tickLoop, "Server Tick");
+        tickThread = new Thread(this::tickLoop, "Server Tick");
         tickThread.setDaemon(true);
         tickThread.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
+        Runtime.getRuntime().addShutdownHook(new Thread(this::stop, "Shutdown Hook"));
         logger.info("vib-MC started on %s:%d (seed %d)", config.address(), config.port(),
                 worldManager.getMainWorld().seed());
 
-        while (running) {
-            try {
+        try {
+            while (running) {
                 Thread.sleep(200);
-            } catch (InterruptedException e) {
-                break;
             }
-        }
-    }
-
-    /**
-     * Refuses to start on a configuration that would silently let anyone log in as anyone.
-     *
-     * <p>Legacy forwarding trusts whatever identity the proxy sends. That is fine when the
-     * proxy authenticated the player, but with {@code online-mode=false} nothing anywhere
-     * in the chain checks the account, so the combination is rejected rather than started
-     * in a state the operator would reasonably believe is secure.
-     *
-     * @return true if it is safe to continue starting
-     */
-    private boolean checkSecurityConfig() {
-        if (config.proxyLegacy() && !config.onlineMode()) {
-            logger.severe("proxy-mode=legacy requires online-mode=true.");
-            logger.severe("Legacy forwarding trusts the identity the proxy sends, so the proxy "
-                    + "must be the thing doing the authenticating. With online-mode=false nobody "
-                    + "checks the account at all and any client could claim any username.");
-            logger.severe("Set online-mode=true, or set proxy-mode=none for a direct-connect server.");
-            return false;
-        }
-        if (config.proxyLegacy() && config.proxyTrustedAddress().isEmpty()) {
-            logger.warn("proxy-mode=legacy with a blank proxy-trusted-address: any host that can "
-                    + "reach this port can claim any identity. Only do this if the port is "
-                    + "firewalled to the proxy.");
-        }
-        if (!config.onlineMode()) {
-            logger.warn("online-mode=false: players are not verified with Mojang and skins come "
-                    + "from the skin-url settings rather than their real accounts.");
-        }
-        return true;
-    }
-
-    private void maybePromptSkinPlugin() {
-        if (config.hasSkinPluginSetting()) {
-            return;
-        }
-        Console console = System.console();
-        if (console == null) {
-            config.enableSkinPlugin(true);
-            logger.info("No interactive console detected; Skins plugin enabled by default.");
-            return;
-        }
-        logger.info("Would you like to add this plugin? (y/n)");
-        logger.info("  Skins plugin - lets players set a custom skin with /skin set <url>.");
-        logger.info("  Skins apply to everyone online instantly and can be changed anytime.");
-        String line = console.readLine();
-        boolean enable = line != null && (line.trim().equalsIgnoreCase("y") || line.trim().equalsIgnoreCase("yes"));
-        config.enableSkinPlugin(enable);
-        if (enable) {
-            logger.info("Skins plugin added. Use /skin set <url> in-game to change your skin.");
-        } else {
-            logger.info("Skins plugin skipped. You can add it later by setting skin-plugin-enabled=true in server.properties.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            stop();
         }
     }
 
     private void tickLoop() {
+        int autosaveInterval = config.autosaveIntervalTicks();
         while (running) {
             long start = System.currentTimeMillis();
             tickCounter++;
-            pluginManager.fireTickStart();
-            for (net.vibmc.world.World world : worldManager.getWorlds()) {
-                world.tick(tickCounter);
-            }
-            playerManager.tickAll();
-            networkServer.tick();
-            pluginManager.fireTickEnd();
-
-            if (tickCounter % 100 == 0) {
-                long keepAlive = System.currentTimeMillis();
-                for (net.vibmc.entity.PlayerEntity player : playerManager.getOnlinePlayers()) {
-                    player.sendKeepAlive(keepAlive);
+            try {
+                drainMainThreadTasks(MAX_MAIN_THREAD_TASKS_PER_TICK);
+                if (!running) break;
+                pluginManager.fireTickStart();
+                for (net.vibmc.world.World world : worldManager.getWorlds()) {
+                    world.tick(tickCounter);
                 }
-            }
+                playerManager.tickAll();
+                networkServer.tick();
+                pluginManager.fireTickEnd();
 
-            int autosaveInterval = config.autosaveIntervalTicks();
-            if (autosaveInterval > 0 && tickCounter % autosaveInterval == 0) {
-                int written = worldManager.saveAll();
-                if (written > 0) {
-                    logger.info("Autosaved %d chunk%s", written, written == 1 ? "" : "s");
+                if (automaticSaving && autosaveInterval > 0 && tickCounter % autosaveInterval == 0) {
+                    int saved = worldManager.saveAll();
+                    int playersSaved = playerManager.saveAllPlayers();
+                    if (saved > 0 || playersSaved > 0) {
+                        logger.info("Autosaved %d chunk(s) and %d player(s)", saved, playersSaved);
+                    }
                 }
+                if (tickCounter % 100 == 0) {
+                    long keepAlive = System.currentTimeMillis();
+                    for (ServerPlayer player : playerManager.getOnlinePlayers()) {
+                        player.sendKeepAlive(keepAlive);
+                    }
+                }
+            } catch (RuntimeException e) {
+                logger.severe("Unhandled error during tick %d: %s", tickCounter, e);
             }
 
             long elapsed = System.currentTimeMillis() - start;
@@ -202,71 +169,90 @@ public final class VibMC {
     }
 
     /**
-     * Shuts the server down, finishing all shutdown work before the process is allowed to
-     * exit.
-     *
-     * <p>{@code running} is cleared <em>last</em>, deliberately. This can be called from
-     * the console thread or the JVM shutdown hook, while {@link #start} is parked waiting
-     * for {@code running} to go false. Clearing it first would release the main thread,
-     * let {@code main} return, and let the JVM tear down the daemon threads mid-save -
-     * which silently lost both the shutdown kick and the world save.
+     * Runs an action on the authoritative server tick thread. Packet listeners and the console
+     * use this boundary before touching worlds, entities, inventories, or player collections.
      */
-    public void stop() {
-        synchronized (stopLock) {
-            if (stopping) {
-                return;
-            }
-            stopping = true;
-            logger.info("Shutting down...");
+    public boolean executeOnMainThread(Runnable task) {
+        if (task == null) throw new IllegalArgumentException("task cannot be null");
+        Thread authoritativeThread = tickThread;
+        if (Thread.currentThread() == authoritativeThread || (authoritativeThread == null && !running)) {
+            task.run();
+            return true;
+        }
+        int queued = queuedMainThreadTaskCount.incrementAndGet();
+        if (queued > MAX_QUEUED_MAIN_THREAD_TASKS) {
+            queuedMainThreadTaskCount.decrementAndGet();
+            logger.warn("Rejected a main-thread task because the queue reached %d entries",
+                    MAX_QUEUED_MAIN_THREAD_TASKS);
+            return false;
+        }
+        mainThreadTasks.add(task);
+        return true;
+    }
 
-            // Kick players before saving so they see why the server went away, rather than
-            // timing out into a generic connection-lost screen.
-            String message = config.shutdownMessage();
-            for (net.vibmc.entity.PlayerEntity player : playerManager.getOnlinePlayers()) {
-                player.kick(message);
-            }
+    public boolean isMainThread() {
+        return Thread.currentThread() == tickThread;
+    }
 
-            if (config.saveOnStop()) {
-                int written = worldManager.saveAll();
-                logger.info("Saved %d chunk%s on shutdown", written, written == 1 ? "" : "s");
+    private void drainMainThreadTasks(int maximum) {
+        for (int completed = 0; completed < maximum; completed++) {
+            Runnable task = mainThreadTasks.poll();
+            if (task == null) return;
+            queuedMainThreadTaskCount.decrementAndGet();
+            try {
+                task.run();
+            } catch (RuntimeException error) {
+                logger.severe("Unhandled error in main-thread task: %s", error);
             }
-            pluginManager.onDisable();
-            networkServer.stop();
-            logger.info("vib-MC stopped");
-
-            running = false;
         }
     }
 
-    public boolean isRunning() {
-        return running;
+    public synchronized void stop() {
+        if (!running) {
+            return;
+        }
+        running = false;
+        logger.info("Shutting down...");
+
+        Thread thread = tickThread;
+        if (thread != null && thread != Thread.currentThread()) {
+            thread.interrupt();
+            try {
+                thread.join(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        // The tick thread is stopped; complete work accepted before shutdown on this single
+        // shutdown thread before network close callbacks perform their final cleanup.
+        drainMainThreadTasks(Integer.MAX_VALUE);
+        tickThread = null;
+
+        networkServer.stop();
+        net.vibmc.network.packetevents.PacketEventsRuntime.terminate();
+        if (pluginsEnabled) {
+            pluginManager.onDisable();
+            pluginsEnabled = false;
+        }
+        if (automaticSaving) {
+            int saved = worldManager.saveAll();
+            logger.info("Saved %d chunk(s) to %s", saved,
+                    worldManager.getMainWorld().storage().worldDir());
+        } else {
+            logger.warn("Automatic saving is disabled; shutdown did not save pending changes");
+        }
+        logger.info("vib-MC stopped");
     }
 
-    public ServerConfig getConfig() {
-        return config;
-    }
-
-    public Logger getLogger() {
-        return logger;
-    }
-
-    public WorldManager getWorldManager() {
-        return worldManager;
-    }
-
-    public PluginManager getPluginManager() {
-        return pluginManager;
-    }
-
-    public PlayerManager getPlayerManager() {
-        return playerManager;
-    }
-
-    public NetworkServer getNetworkServer() {
-        return networkServer;
-    }
-
-    public CommandManager getCommandManager() {
-        return commandManager;
-    }
+    public boolean isRunning() { return running; }
+    public ServerConfig getConfig() { return config; }
+    public Logger getLogger() { return logger; }
+    public WorldManager getWorldManager() { return worldManager; }
+    public PluginManager getPluginManager() { return pluginManager; }
+    public PlayerManager getPlayerManager() { return playerManager; }
+    public NetworkServer getNetworkServer() { return networkServer; }
+    public CommandManager getCommandManager() { return commandManager; }
+    public OperatorManager getOperatorManager() { return operatorManager; }
+    public boolean isAutomaticSaving() { return automaticSaving; }
+    public void setAutomaticSaving(boolean enabled) { automaticSaving = enabled; }
 }

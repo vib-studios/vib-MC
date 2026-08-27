@@ -1,5 +1,7 @@
 package net.vibmc.player;
 
+import java.util.Locale;
+
 public enum GameMode {
     SURVIVAL(0),
     CREATIVE(1),
@@ -25,7 +27,7 @@ public enum GameMode {
 
     public static GameMode fromName(String name) {
         if (name == null) return null;
-        String normalized = name.trim().toLowerCase();
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
         switch (normalized) {
             case "0":
             case "survival":

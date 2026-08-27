@@ -16,22 +16,32 @@ public class PluginManager {
     private final List<VibMCPlugin> plugins;
     private final Map<Class<? extends Event>, List<RegisteredListener>> listeners;
     private final PermissionManager permissionManager;
+    private final Map<VibMCPlugin, URLClassLoader> classLoaders;
 
     public PluginManager() {
         this.plugins = new CopyOnWriteArrayList<>();
         this.listeners = new ConcurrentHashMap<>();
         this.permissionManager = new PermissionManager();
+        this.classLoaders = new ConcurrentHashMap<>();
     }
 
     public void loadPlugins(String directory) {
         File pluginDir = new File(directory);
-        if (!pluginDir.exists()) {
-            pluginDir.mkdirs();
+        if (!pluginDir.exists() && !pluginDir.mkdirs()) {
+            VibMC.getInstance().getLogger().warn("Could not create plugin directory: %s", pluginDir);
+            return;
+        }
+        if (!pluginDir.isDirectory()) {
+            VibMC.getInstance().getLogger().warn("Plugin path is not a directory: %s", pluginDir);
             return;
         }
 
-        File[] files = pluginDir.listFiles((dir, name) -> name.endsWith(".jar"));
-        if (files == null) return;
+        File[] files = pluginDir.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".jar"));
+        if (files == null) {
+            VibMC.getInstance().getLogger().warn("Could not list plugin directory: %s", pluginDir);
+            return;
+        }
+        Arrays.sort(files, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
 
         for (File file : files) {
             try {
@@ -43,53 +53,62 @@ public class PluginManager {
     }
 
     private void loadPlugin(File file) throws Exception {
-        URLClassLoader loader = new URLClassLoader(new URL[]{file.toURI().toURL()},
-            getClass().getClassLoader());
+        URLClassLoader loader = new URLClassLoader(
+                new URL[]{file.toURI().toURL()}, getClass().getClassLoader());
+        boolean retained = false;
+        try {
+            PluginDescription description;
+            try (InputStream stream = loader.getResourceAsStream("plugin.yml")) {
+                if (stream == null) {
+                    VibMC.getInstance().getLogger().warn("Plugin %s has no plugin.yml", file.getName());
+                    return;
+                }
+                description = loadDescription(stream);
+            }
 
-        InputStream descStream = loader.getResourceAsStream("plugin.yml");
-        if (descStream == null) {
-            loader.close();
-            VibMC.getInstance().getLogger().warn("Plugin %s has no plugin.yml", file.getName());
-            return;
+            if (description == null) {
+                VibMC.getInstance().getLogger().warn("Invalid plugin.yml in %s", file.getName());
+                return;
+            }
+            if (getPlugin(description.getName()) != null) {
+                VibMC.getInstance().getLogger().warn(
+                        "Duplicate plugin name %s in %s", description.getName(), file.getName());
+                return;
+            }
+
+            Class<?> mainClass = loader.loadClass(description.getMain());
+            if (!VibMCPlugin.class.isAssignableFrom(mainClass)) {
+                VibMC.getInstance().getLogger().warn(
+                        "Plugin %s main class does not extend VibMCPlugin", file.getName());
+                return;
+            }
+
+            VibMCPlugin plugin = (VibMCPlugin) mainClass.getDeclaredConstructor().newInstance();
+            plugin.setDescription(description);
+            plugin.setDataFolder(new File(file.getParentFile(), description.getName()));
+            plugin.setPluginFile(file);
+            plugins.add(plugin);
+            classLoaders.put(plugin, loader);
+            retained = true;
+            VibMC.getInstance().getLogger().info(
+                    "Loaded plugin %s v%s", description.getName(), description.getVersion());
+        } finally {
+            if (!retained) {
+                loader.close();
+            }
         }
-
-        PluginDescription desc = loadDescription(descStream);
-        descStream.close();
-
-        if (desc == null) {
-            loader.close();
-            VibMC.getInstance().getLogger().warn("Invalid plugin.yml in %s", file.getName());
-            return;
-        }
-
-        Class<?> mainClass = loader.loadClass(desc.getMain());
-        if (!VibMCPlugin.class.isAssignableFrom(mainClass)) {
-            loader.close();
-            VibMC.getInstance().getLogger().warn("Plugin %s main class does not extend VibMCPlugin", file.getName());
-            return;
-        }
-
-        VibMCPlugin plugin = (VibMCPlugin) mainClass.getDeclaredConstructor().newInstance();
-        plugin.setDescription(desc);
-        plugin.setDataFolder(new File(file.getParentFile(), desc.getName()));
-        plugin.setPluginFile(file);
-
-        plugins.add(plugin);
-        VibMC.getInstance().getLogger().info("Loaded plugin %s v%s", desc.getName(), desc.getVersion());
     }
 
     private PluginDescription loadDescription(InputStream stream) {
         try {
             Properties props = new Properties();
             props.load(stream);
-            String name = props.getProperty("name");
-            String version = props.getProperty("version");
-            String main = props.getProperty("main");
-            String description = props.getProperty("description", "");
-            String authorStr = props.getProperty("authors", props.getProperty("author", ""));
-            List<String> authors = Arrays.asList(authorStr.split(","));
-            String dependsStr = props.getProperty("depends", "");
-            List<String> depends = dependsStr.isEmpty() ? new ArrayList<>() : Arrays.asList(dependsStr.split(","));
+            String name = trimToNull(props.getProperty("name"));
+            String version = trimToNull(props.getProperty("version"));
+            String main = trimToNull(props.getProperty("main"));
+            String description = props.getProperty("description", "").trim();
+            List<String> authors = parseList(props.getProperty("authors", props.getProperty("author", "")));
+            List<String> depends = parseList(props.getProperty("depends", ""));
             if (name != null && version != null && main != null) {
                 return new PluginDescription(name, version, main, authors, depends, description);
             }
@@ -99,36 +118,121 @@ public class PluginManager {
         return null;
     }
 
+    private static String trimToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() >= 2
+                && ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
+                || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+            return trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+        return trimmed;
+    }
+
+    private static List<String> parseList(String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        if (normalized.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> values = new ArrayList<>();
+        for (String part : normalized.split(",")) {
+            String item = trimToNull(part);
+            if (item != null) {
+                values.add(item);
+            }
+        }
+        return values;
+    }
+
     public void onLoad() {
-        for (VibMCPlugin plugin : plugins) {
+        for (VibMCPlugin plugin : new ArrayList<>(plugins)) {
             try {
                 plugin.onLoad();
             } catch (Exception e) {
                 VibMC.getInstance().getLogger().severe("Error loading plugin %s: %s", plugin.getName(), e);
+                unloadPlugin(plugin);
             }
         }
     }
 
     public void onEnable() {
-        for (VibMCPlugin plugin : plugins) {
-            try {
-                plugin.onEnable();
-                plugin.setEnabled(true);
-                VibMC.getInstance().getLogger().info("Enabled plugin %s v%s", plugin.getName(), plugin.getVersion());
-            } catch (Exception e) {
-                VibMC.getInstance().getLogger().severe("Error enabling plugin %s: %s", plugin.getName(), e);
+        List<VibMCPlugin> remaining = new ArrayList<>(plugins);
+        boolean progressed;
+        do {
+            progressed = false;
+            Iterator<VibMCPlugin> iterator = remaining.iterator();
+            while (iterator.hasNext()) {
+                VibMCPlugin plugin = iterator.next();
+                if (!dependenciesEnabled(plugin)) {
+                    continue;
+                }
+                try {
+                    File dataFolder = plugin.getDataFolder();
+                    if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+                        throw new IllegalStateException("Could not create data folder " + dataFolder);
+                    }
+                    plugin.onEnable();
+                    plugin.setEnabled(true);
+                    VibMC.getInstance().getLogger().info(
+                            "Enabled plugin %s v%s", plugin.getName(), plugin.getVersion());
+                } catch (Exception e) {
+                    VibMC.getInstance().getLogger().severe("Error enabling plugin %s: %s", plugin.getName(), e);
+                }
+                iterator.remove();
+                progressed = true;
+            }
+        } while (progressed && !remaining.isEmpty());
+
+        for (VibMCPlugin plugin : remaining) {
+            VibMC.getInstance().getLogger().warn(
+                    "Did not enable plugin %s; dependency missing, disabled, or cyclic: %s",
+                    plugin.getName(), plugin.getDescription().getDepends());
+        }
+    }
+
+    private boolean dependenciesEnabled(VibMCPlugin plugin) {
+        for (String dependencyName : plugin.getDescription().getDepends()) {
+            VibMCPlugin dependency = getPlugin(dependencyName);
+            if (dependency == null || !dependency.isEnabled()) {
+                return false;
             }
         }
+        return true;
     }
 
     public void onDisable() {
         for (int i = plugins.size() - 1; i >= 0; i--) {
             VibMCPlugin plugin = plugins.get(i);
+            if (!plugin.isEnabled()) {
+                continue;
+            }
             try {
                 plugin.onDisable();
-                plugin.setEnabled(false);
             } catch (Exception e) {
                 VibMC.getInstance().getLogger().severe("Error disabling plugin %s: %s", plugin.getName(), e);
+            } finally {
+                plugin.setEnabled(false);
+            }
+        }
+        listeners.clear();
+        for (VibMCPlugin plugin : new ArrayList<>(plugins)) {
+            unloadPlugin(plugin);
+        }
+    }
+
+    private void unloadPlugin(VibMCPlugin plugin) {
+        plugins.remove(plugin);
+        URLClassLoader loader = classLoaders.remove(plugin);
+        if (loader != null) {
+            try {
+                loader.close();
+            } catch (java.io.IOException e) {
+                VibMC.getInstance().getLogger().warn("Could not close plugin %s: %s", plugin.getName(), e);
             }
         }
     }

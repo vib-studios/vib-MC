@@ -1,0 +1,7 @@
+name=minecraft:village/road_z_segment
+size=3,1,17
+dimension=overworld
+standalone=false
+anchor=1,0,8
+palette.0=minecraft:gravel
+fill=0,0,0,2,0,16,0

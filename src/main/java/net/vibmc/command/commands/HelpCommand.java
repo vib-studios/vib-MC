@@ -13,6 +13,9 @@ public class HelpCommand extends Command {
     public boolean execute(CommandSender sender, String[] args) {
         sender.sendMessage("{\"text\":\"§6--- Commands ---\"}");
         for (Command command : VibMC.getInstance().getCommandManager().getCommands().values()) {
+            if (!VibMC.getInstance().getCommandManager().canExecute(sender, command)) {
+                continue;
+            }
             sender.sendMessage("{\"text\":\"§e/" + command.getName() + " §7- " + command.getDescription() + "\"}");
         }
         return true;
