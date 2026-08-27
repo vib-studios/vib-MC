@@ -23,7 +23,7 @@ vib-MC is a hobby/experimental project and is not intended to replace mature ser
 
 ## Latest Release — v0.0.6
 
-v0.0.6 Add PacketEvents-based protocol handling, player storage, world persistence and generation, structure resources, updated tests, and supporting development tools.
+v0.0.6 - Add PacketEvents-based protocol handling, player storage, world persistence and generation, structure resources, updated tests, and supporting development tools.
 
 ### World persistence
 
