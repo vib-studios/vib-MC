@@ -15,15 +15,15 @@
 
 ---
 
-`vib-MC` is an experimental Minecraft Java Edition 1.12.2 server implementation (protocol 340) built from scratch and developed through AI-assisted/vibecoded development.
+`vib-MC` is an experimental Minecraft Java Edition server implementation built from scratch and developed through AI-assisted/vibecoded development.
 
 The project focuses on experimenting with Minecraft server internals, custom world generation, persistence, multiplayer, plugins, and making the server easy to extend.
 
-vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may change without migration, and resets can be required at any time.
+vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may, while unlikly, change without migration, and resets could be required at any time.
 
-## Latest Release — v0.0.4-hotfix.3
+## Latest Release — v0.0.6
 
-Hotfix 3 adds the world persistence system and makes worlds survive server restarts.
+v0.0.6 Add PacketEvents-based protocol handling, player storage, world persistence and generation, structure resources, updated tests, and supporting development tools.
 
 ### World persistence
 
@@ -262,28 +262,9 @@ npm run test:dimensions
 | ✅ | v0.0.4 — stable |
 | ✅ | v0.0.4-hotfix.1 |
 | ✅ | v0.0.4-hotfix.2 |
-| 🚀 | **v0.0.4-hotfix.3 — World Persistence** |
-| 🔮 | v0.0.5 — major feature update |
-
-## What's planned for v0.0.5
-
-The next major update is planned to expand the world and player experience with features such as:
-
-- Random and persistent world seeds
-- More varied terrain and hills
-- Trees
-- Ores
-- Caves and cave entrances
-- Biomes such as desert, snow, plains, and forest
-- Generated structures and villages
-- Improved multiplayer functionality
-- Skins
-- Tab list improvements
-- More game mode functionality
-- Nether development
-- Expanded plugin capabilities
-
-Features may be implemented incrementally as development progresses.
+| ✅ | v0.0.4-hotfix.3 |
+| ✅ | v0.0.5 - stable |
+| 🚀 | **v0.0.6 - PacketEvents & Netty based networking w/ multi-version**  |
 
 ## License
 
