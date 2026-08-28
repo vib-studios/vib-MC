@@ -12,6 +12,7 @@
     "test:kick": "node kick-test.js",
     "test:player-persistence": "node player-persistence-test.js",
     "test:spawn-flight": "node spawn-flight-test.js",
+    "test:survival": "node survival-test.js",
     "test:versions": "node version-compat-test.js"
   },
   "dependencies": {

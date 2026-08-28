@@ -72,7 +72,28 @@ public class WorldChunk {
                 for (int y = surface + 1; y <= seaLevel; y++) {
                     chunk.setBlock(x, y, z, Blocks.WATER);
                 }
+                if (surface > seaLevel) decorateDesert(chunk, terrain, x, z, worldX, worldZ, surface);
             }
+        }
+    }
+
+    /**
+     * Cacti on dry desert sand. Neighbour clearance is tested against the terrain height
+     * function rather than block lookups, because a block lookup at a chunk edge would
+     * generate the neighbouring chunk from inside this chunk's own generation.
+     */
+    private static void decorateDesert(WorldChunk chunk, TerrainGenerator terrain, int x, int z,
+                                       int worldX, int worldZ, int surface) {
+        if (!"minecraft:desert".equals(chunk.world.biomeAt(worldX, worldZ))) return;
+        int hash = terrain.hash(worldX + 0x0CAC, worldZ - 0x0705);
+        if ((hash & 0xffff) / 65535.0 > 0.02) return;
+        // Vanilla cacti refuse to grow against a neighbour, which is what keeps them isolated.
+        for (int[] offset : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            if (terrain.getHeight(worldX + offset[0], worldZ + offset[1]) > surface) return;
+        }
+        int height = 1 + Math.floorMod(hash >>> 8, 3);
+        for (int y = 1; y <= height && surface + y < WORLD_HEIGHT; y++) {
+            chunk.setBlock(x, surface + y, z, Blocks.CACTUS);
         }
     }
 
@@ -138,11 +159,8 @@ public class WorldChunk {
     private static double lerp(double a,double b,double amount){return a+(b-a)*amount;}
 
     private static WrappedBlockState oreOrStone(TerrainGenerator terrain, int x, int y, int z) {
-        int hash = terrain.hash(x ^ (y * 7349), z + y * 31);
-        // Sparse vanilla-scale averages; future vein carvers can cluster these deposits.
-        if (y < 128 && hash % 997 < 5) return Blocks.COAL_ORE;
-        if (y < 64 && hash % 1301 < 4) return Blocks.IRON_ORE;
-        return stoneMix(terrain, x, y, z);
+        WrappedBlockState ore = net.vibmc.world.gen.OreGenerator.oreAt(terrain, x, y, z);
+        return ore != null ? ore : stoneMix(terrain, x, y, z);
     }
 
     private static WrappedBlockState stoneMix(TerrainGenerator terrain, int x, int y, int z) {

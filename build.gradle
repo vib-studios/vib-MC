@@ -81,7 +81,7 @@ jar {
         attributes(
             'Main-Class': 'net.vibmc.server.VibMC',
             'Implementation-Title': 'vib-MC',
-            'Implementation-Version': '0.0.6-hotfix.1'
+            'Implementation-Version': '0.0.7'
         )
     }
     archiveBaseName = 'vib-mc'

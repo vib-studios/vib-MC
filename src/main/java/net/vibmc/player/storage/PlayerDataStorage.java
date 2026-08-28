@@ -21,8 +21,10 @@ import java.util.UUID;
 /** Binary, atomic player-data storage. Item payloads use PacketEvents' complete NBT codec. */
 public final class PlayerDataStorage {
     private static final int MAGIC = 0x56494250; // VIBP
-    private static final int VERSION = 1;
+    /** Version 2 added armour, the offhand, air supply, and exhaustion. */
+    private static final int VERSION = 2;
     private static final int INVENTORY_SIZE = 36;
+    private static final int ARMOR_SIZE = net.vibmc.inventory.Armor.SLOTS;
     private static final int MAX_ITEM_NBT_BYTES = 1 << 20;
     private static final int MAX_STRING_BYTES = 32767;
     private static final int MAX_FILE_BYTES = 8 << 20;
@@ -41,7 +43,9 @@ public final class PlayerDataStorage {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             if (input.readInt() != MAGIC) throw new IOException("invalid player-data magic");
             int version = input.readInt();
-            if (version != VERSION) throw new IOException("unsupported player-data version " + version);
+            if (version < 1 || version > VERSION) {
+                throw new IOException("unsupported player-data version " + version);
+            }
             String world = readBoundedString(input, "world name");
             double x = input.readDouble(), y = input.readDouble(), z = input.readDouble();
             float yaw = input.readFloat(), pitch = input.readFloat(), health = input.readFloat();
@@ -54,9 +58,26 @@ public final class PlayerDataStorage {
             if (slots != INVENTORY_SIZE) throw new IOException("invalid inventory size " + slots);
             ItemStack[] inventory = new ItemStack[slots];
             for (int slot = 0; slot < slots; slot++) inventory[slot] = readItem(input);
+            // Version 1 files predate armour and vitals; they load with vanilla defaults.
+            ItemStack[] armor = new ItemStack[ARMOR_SIZE];
+            java.util.Arrays.fill(armor, ItemStack.EMPTY);
+            ItemStack offhand = ItemStack.EMPTY;
+            int air = 300;
+            float exhaustion = 0.0f;
+            if (version >= 2) {
+                int worn = input.readUnsignedByte();
+                if (worn != ARMOR_SIZE) throw new IOException("invalid armor size " + worn);
+                for (int slot = 0; slot < worn; slot++) armor[slot] = readItem(input);
+                offhand = readItem(input);
+                air = input.readInt();
+                exhaustion = input.readFloat();
+                if (air < 0 || air > 300 || !Float.isFinite(exhaustion) || exhaustion < 0.0f) {
+                    throw new IOException("invalid player vitals");
+                }
+            }
             if (input.read() != -1) throw new IOException("trailing bytes in player data");
             return Optional.of(new PlayerData(world, x, y, z, yaw, pitch, health, food,
-                    saturation, gameMode, flying, heldSlot, inventory));
+                    saturation, gameMode, flying, heldSlot, inventory, armor, offhand, air, exhaustion));
         } catch (RuntimeException error) {
             throw new IOException("invalid player data for " + uuid, error);
         }
@@ -80,6 +101,11 @@ public final class PlayerDataStorage {
                 output.writeByte(data.heldItemSlot);
                 output.writeByte(data.inventory.length);
                 for (ItemStack item : data.inventory) writeItem(output, item);
+                output.writeByte(data.armor.length);
+                for (ItemStack piece : data.armor) writeItem(output, piece);
+                writeItem(output, data.offhand);
+                output.writeInt(data.airSupply);
+                output.writeFloat(data.exhaustion);
             }
             try {
                 Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -100,65 +126,18 @@ public final class PlayerDataStorage {
     }
 
     private static void writeItem(DataOutput output, ItemStack item) throws IOException {
-        if (item == null || item.isEmpty()) {
-            output.writeBoolean(false);
-            return;
-        }
-        output.writeBoolean(true);
-        writeBoundedString(output, item.getType().getName().toString(), "item type");
-        output.writeInt(item.getAmount());
-        output.writeInt(item.getDamageValue());
-        NBTCompound tag = item.getNBT();
-        output.writeBoolean(tag != null);
-        if (tag == null) return;
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream nbtOutput = new DataOutputStream(bytes)) {
-            DefaultNBTSerializer.INSTANCE.serializeTag(nbtOutput, tag, true);
-        }
-        byte[] payload = bytes.toByteArray();
-        if (payload.length > MAX_ITEM_NBT_BYTES) throw new IOException("item NBT exceeds size limit");
-        output.writeInt(payload.length);
-        output.write(payload);
-    }
-
-    private static String readBoundedString(DataInput input, String label) throws IOException {
-        int length = input.readUnsignedShort();
-        if (length > MAX_STRING_BYTES) throw new IOException(label + " is too long");
-        byte[] bytes = new byte[length];
-        input.readFully(bytes);
-        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private static void writeBoundedString(DataOutput output, String value, String label) throws IOException {
-        byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        if (bytes.length > MAX_STRING_BYTES) throw new IOException(label + " is too long");
-        output.writeShort(bytes.length);
-        output.write(bytes);
+        net.vibmc.inventory.ItemCodec.writeItem(output, item);
     }
 
     private static ItemStack readItem(DataInput input) throws IOException {
-        if (!input.readBoolean()) return ItemStack.EMPTY;
-        String typeName = readBoundedString(input, "item type");
-        ItemType type = ItemTypes.getByName(typeName);
-        if (type == null || type == ItemTypes.AIR) throw new IOException("unknown item type " + typeName);
-        int amount = input.readInt();
-        int damage = input.readInt();
-        if (amount <= 0 || amount > 127) throw new IOException("invalid item amount " + amount);
-        NBTCompound tag = null;
-        if (input.readBoolean()) {
-            int length = input.readInt();
-            if (length < 0 || length > MAX_ITEM_NBT_BYTES) throw new IOException("invalid item NBT length " + length);
-            byte[] payload = new byte[length];
-            input.readFully(payload);
-            try (DataInputStream nbtInput = new DataInputStream(new ByteArrayInputStream(payload))) {
-                NBT encoded = DefaultNBTSerializer.INSTANCE.deserializeTag(NBTLimiter.noop(), nbtInput, true);
-                if (!(encoded instanceof NBTCompound)) throw new IOException("item tag is not a compound");
-                tag = (NBTCompound) encoded;
-            }
-        }
-        ItemStack item = ItemStack.builder().type(type).amount(amount).nbt(tag)
-                .version(ClientVersion.V_1_12_2).build();
-        item.setDamageValue(damage);
-        return item;
+        return net.vibmc.inventory.ItemCodec.readItem(input);
+    }
+
+    private static String readBoundedString(DataInput input, String label) throws IOException {
+        return net.vibmc.inventory.ItemCodec.readBoundedString(input, label);
+    }
+
+    private static void writeBoundedString(DataOutput output, String value, String label) throws IOException {
+        net.vibmc.inventory.ItemCodec.writeBoundedString(output, value, label);
     }
 }

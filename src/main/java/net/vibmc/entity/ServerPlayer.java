@@ -48,6 +48,18 @@ public class ServerPlayer extends Entity {
     private int nextTeleportId;
     private int pendingTeleportId=-1;
     private UUID cameraTargetUuid;
+    private final PlayerVitals vitals = new PlayerVitals(this);
+    private final ItemStack[] armor = new ItemStack[net.vibmc.inventory.Armor.SLOTS];
+    private ItemStack offhand = ItemStack.EMPTY;
+    private int hurtCooldown;
+    private DamageSource lastDamageSource = DamageSource.GENERIC;
+    private String lastAttacker;
+    private double lastExhaustionX, lastExhaustionZ;
+    private final net.vibmc.crafting.CraftingGrid crafting = new net.vibmc.crafting.CraftingGrid(2);
+    private net.vibmc.inventory.WindowSession openWindow;
+    private ItemStack carried = ItemStack.EMPTY;
+    private int nextWindowId = 1;
+    private boolean sneaking, sprinting;
 
     public ServerPlayer(User user) {
         this(null,user,null,null);
@@ -65,6 +77,7 @@ public class ServerPlayer extends Entity {
         this.x = 8.5;
         this.y = 0;
         this.z = 8.5;
+        java.util.Arrays.fill(armor, ItemStack.EMPTY);
     }
 
     public Channel channel(){return (Channel)user.getChannel();}
@@ -104,14 +117,110 @@ public class ServerPlayer extends Entity {
         setFoodLevel(20);
         setFoodSaturation(5.0f);
         fallDistance = 0.0f;
+        hurtCooldown = 0;
+        vitals.reset();
+        sendEntityFlags();
         spawnAtSpawn();
     }
 
     public void kill(){
         if(!alive)return;
+        lastDamageSource=DamageSource.GENERIC;
+        lastAttacker=null;
         setHealth(0.0f);
         die();
         sendHealth();
+    }
+
+    public boolean hurt(float amount, DamageSource source){
+        return hurt(amount, source, null);
+    }
+
+    /**
+     * The single entry point for taking damage. Applies armour, invulnerability frames, the
+     * hurt flash and sound, and records what to say if this is the killing blow. Creative and
+     * spectator players are never hurt.
+     */
+    public boolean hurt(float amount, DamageSource source, String attacker){
+        if(!alive||!isInWorld()||source==null||!Float.isFinite(amount)||amount<=0)return false;
+        if(gameMode==GameMode.CREATIVE||gameMode==GameMode.SPECTATOR||isInvulnerable())return false;
+        if(source.usesInvulnerabilityFrames()){
+            if(hurtCooldown>0)return false;
+            hurtCooldown=10;
+        }
+        float applied=source.reducedByArmor()
+                ?net.vibmc.inventory.Armor.reduce(amount,net.vibmc.inventory.Armor.totalPoints(armor))
+                :amount;
+        lastDamageSource=source;
+        lastAttacker=attacker;
+        damage(applied);
+        sendHealth();
+        net.vibmc.world.Effects.status(this,net.vibmc.world.Effects.STATUS_HURT);
+        if(source.hurtSound()!=null)net.vibmc.world.Effects.sound(world,x,y,z,source.hurtSound(),
+                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+        return true;
+    }
+
+    /**
+     * Death effects and the death message. The inventory is deliberately kept: vib-MC has no
+     * item entities, so dropping it would destroy it with no way to get it back.
+     */
+    @Override
+    protected void onDeath(){
+        if(!isInWorld())return;
+        net.vibmc.world.Effects.status(this,net.vibmc.world.Effects.STATUS_DEATH);
+        net.vibmc.world.Effects.sound(world,x,y,z,
+                com.github.retrooper.packetevents.protocol.sound.Sounds.ENTITY_PLAYER_DEATH,
+                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+        VibMC server=VibMC.getInstance();
+        if(server==null||username==null)return;
+        String message=lastDamageSource.deathMessage(username,lastAttacker);
+        server.getPlayerManager().broadcastMessage(net.vibmc.network.JsonText.component(message));
+        server.getLogger().info("%s", message);
+    }
+
+    public boolean isSneaking(){return sneaking;}
+    public void setSneaking(boolean value){sneaking=value;}
+    public boolean isSprinting(){return sprinting;}
+    public void setSprinting(boolean value){sprinting=value;}
+    public boolean isBurning(){return vitals.isBurning();}
+    public void setOnFire(int ticks){vitals.setOnFire(ticks);}
+    public void addExhaustion(float amount){vitals.addExhaustion(amount);}
+
+    public ItemStack getArmorPiece(int slot){
+        return slot<0||slot>=armor.length?ItemStack.EMPTY:armor[slot].copy();
+    }
+
+    public void setArmorPiece(int slot,ItemStack piece){
+        if(slot<0||slot>=armor.length)return;
+        armor[slot]=piece==null?ItemStack.EMPTY:piece.copy();
+        broadcastEquipment();
+    }
+
+    public ItemStack getOffhandItem(){return offhand.copy();}
+
+    public void setOffhandItem(ItemStack item){
+        offhand=item==null?ItemStack.EMPTY:item.copy();
+        broadcastEquipment();
+    }
+
+    public void broadcastEquipment(){
+        VibMC server=VibMC.getInstance();
+        if(server!=null&&isInWorld())server.getPlayerManager().broadcastEquipment(this);
+    }
+
+    public void sendEntityFlags(){
+        VibMC server=VibMC.getInstance();
+        if(server!=null&&isInWorld())server.getPlayerManager().broadcastEntityFlags(this);
+    }
+
+    /** Air-bubble metadata; index 1 has been the air supply since 1.9. */
+    public void sendAirSupply(int air){
+        if(user==null)return;
+        send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata(
+                getEntityId(),java.util.Collections.singletonList(
+                        new com.github.retrooper.packetevents.protocol.entity.data.EntityData<Integer>(
+                                1,com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes.INT,air))));
     }
 
     /** Relocates only invalid positions: inside blocks, fluids, or without a solid floor. */
@@ -160,11 +269,12 @@ public class ServerPlayer extends Entity {
         if (movementGraceTicks > 0) movementGraceTicks--;
         if (portalCooldown > 0) portalCooldown--;
         if (voidDamageCooldown > 0) voidDamageCooldown--;
+        if (hurtCooldown > 0) hurtCooldown--;
         if (y < -64 && voidDamageCooldown == 0 && gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR) {
-            damage(4.0f);
-            sendHealth();
+            hurt(4.0f, DamageSource.VOID);
             voidDamageCooldown = 10;
         }
+        vitals.tick();
         // Re-checked every tick, not just when a movement packet arrives: the flag is sticky
         // and a creative player who stops sending positions (dimension change, unconfirmed
         // teleport) must never be kicked for a survival-era flag.
@@ -259,16 +369,26 @@ public class ServerPlayer extends Entity {
             fallDistance += (float) (lastClientY - currentY);
         } else if (reportedOnGround) {
             if (fallDistance > 3.0f && gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR) {
-                damage(fallDistance - 3.0f);
-                sendHealth();
+                hurt(fallDistance - 3.0f, DamageSource.FALL);
             }
             fallDistance = 0.0f;
         }
         lastClientY = currentY;
         hasClientPosition = true;
+        accumulateMovementExhaustion();
     }
 
-    private void sendHealth() {
+    /** Walking costs hunger; the vanilla rate is 0.01 exhaustion per block travelled. */
+    private void accumulateMovementExhaustion(){
+        double dx=x-lastExhaustionX,dz=z-lastExhaustionZ;
+        double travelled=Math.sqrt(dx*dx+dz*dz);
+        lastExhaustionX=x;
+        lastExhaustionZ=z;
+        if(travelled>0.01&&travelled<8.0&&onGround)vitals.addExhaustion((float)(travelled*(sprinting?0.1:0.01)));
+    }
+
+    /** Public so a plugin that changes health can push it to the client. */
+    public void sendHealth() {
         if(user!=null)send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateHealth(getHealth(),foodLevel,foodSaturation));
     }
 
@@ -421,9 +541,11 @@ public class ServerPlayer extends Entity {
 
     public net.vibmc.player.storage.PlayerData snapshotPersistentState() {
         if (!isInWorld() || uuid == null) throw new IllegalStateException("player is not fully initialized");
+        ItemStack[] worn = new ItemStack[armor.length];
+        for (int slot = 0; slot < armor.length; slot++) worn[slot] = armor[slot];
         return new net.vibmc.player.storage.PlayerData(world.name(), x, y, z, yaw, pitch,
                 health, foodLevel, foodSaturation, gameMode, flying, heldItemSlot,
-                inventory.getSlots());
+                inventory.getSlots(), worn, offhand, vitals.airSupply(), vitals.exhaustion());
     }
 
     public void restorePersistentState(net.vibmc.player.storage.PlayerData data, World restoredWorld) {
@@ -443,6 +565,13 @@ public class ServerPlayer extends Entity {
         inventory.clear();
         int length = Math.min(inventory.getSize(), data.inventory.length);
         for (int slot = 0; slot < length; slot++) inventory.setSlot(slot, data.inventory[slot]);
+        java.util.Arrays.fill(armor, ItemStack.EMPTY);
+        int worn = Math.min(armor.length, data.armor.length);
+        for (int slot = 0; slot < worn; slot++) armor[slot] = data.armor[slot].copy();
+        offhand = data.offhand.copy();
+        vitals.reset();
+        vitals.setAirSupply(data.airSupply);
+        vitals.setExhaustion(data.exhaustion);
         onGround = false;
         movementGraceTicks = 100;
         // A stored position inside water would drown the player on login; creative and
@@ -457,8 +586,46 @@ public class ServerPlayer extends Entity {
     }
 
     public void sendInventory() {
-        if(user!=null){java.util.List<com.github.retrooper.packetevents.protocol.item.ItemStack> items=new java.util.ArrayList<>();for(int slot=0;slot<46;slot++)items.add(slot>=36&&slot<=44?inventory.getSlot(slot-36):slot>=9&&slot<=35?inventory.getSlot(slot):com.github.retrooper.packetevents.protocol.item.ItemStack.EMPTY);send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,items,com.github.retrooper.packetevents.protocol.item.ItemStack.EMPTY));}
+        if(user==null)return;
+        java.util.List<ItemStack> items=new java.util.ArrayList<>();
+        for(int slot=0;slot<46;slot++)items.add(windowSlot(slot));
+        send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,items,ItemStack.EMPTY));
     }
+
+    /**
+     * Maps a vanilla window-0 slot onto vib-MC storage: 0 is the crafting result, 1-4 the 2x2
+     * grid, 5-8 armour, 9-35 the main inventory, 36-44 the hotbar, and 45 the offhand.
+     */
+    public ItemStack windowSlot(int slot){
+        if(slot>=36&&slot<=44)return inventory.getSlot(slot-36);
+        if(slot>=9&&slot<=35)return inventory.getSlot(slot);
+        if(slot>=5&&slot<=8)return getArmorPiece(slot-5);
+        if(slot==45)return getOffhandItem();
+        if(slot>=1&&slot<=4)return crafting.getSlot(slot-1);
+        if(slot==0)return crafting.getResult();
+        return ItemStack.EMPTY;
+    }
+
+    /** Writes a vanilla window-0 slot back into vib-MC storage. */
+    public void setWindowSlot(int slot,ItemStack item){
+        if(slot>=36&&slot<=44)inventory.setSlot(slot-36,item);
+        else if(slot>=9&&slot<=35)inventory.setSlot(slot,item);
+        else if(slot>=5&&slot<=8)setArmorPiece(slot-5,item);
+        else if(slot==45)setOffhandItem(item);
+        else if(slot>=1&&slot<=4)crafting.setSlot(slot-1,item);
+    }
+
+    /** Allocates the next container window id, cycling through the byte range vanilla uses. */
+    public int nextWindowId(){
+        nextWindowId=nextWindowId%100+1;
+        return nextWindowId;
+    }
+
+    public net.vibmc.crafting.CraftingGrid getCrafting(){return crafting;}
+    public net.vibmc.inventory.WindowSession getOpenWindow(){return openWindow;}
+    public void setOpenWindow(net.vibmc.inventory.WindowSession window){this.openWindow=window;}
+    public ItemStack getCarriedItem(){return carried.copy();}
+    public void setCarriedItem(ItemStack item){carried=item==null?ItemStack.EMPTY:item.copy();}
 
     public Set<Long> getSentChunks() {
         return sentChunks;

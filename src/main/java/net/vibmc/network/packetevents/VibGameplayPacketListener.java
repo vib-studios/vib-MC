@@ -40,8 +40,11 @@ public final class VibGameplayPacketListener implements PacketListener {
         } else if (event.getPacketType() == PacketType.Play.Client.INTERACT_ENTITY) {
             WrapperPlayClientInteractEntity wrapper=new WrapperPlayClientInteractEntity(event);
             int entityId=wrapper.getEntityId();String action=wrapper.getAction().name();
-            if("ATTACK".equals(action))submit(player,()->VibMC.getInstance().getPlayerManager()
-                    .handleSpectatorInteraction(player,entityId));
+            if("ATTACK".equals(action))submit(player,()->{
+                if(player.getGameModeEnum()==GameMode.SPECTATOR)
+                    VibMC.getInstance().getPlayerManager().handleSpectatorInteraction(player,entityId);
+                else VibMC.getInstance().getPlayerManager().handleAttack(player,entityId);
+            });
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.SPECTATE) {
             java.util.UUID target=new WrapperPlayClientSpectate(event).getTargetUUID();
@@ -49,7 +52,10 @@ public final class VibGameplayPacketListener implements PacketListener {
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.ENTITY_ACTION) {
             String action=new WrapperPlayClientEntityAction(event).getAction().name();
-            if("START_SNEAKING".equals(action))submit(player,()->player.resetSpectatorCamera(true));
+            if("START_SNEAKING".equals(action))submit(player,()->{player.setSneaking(true);player.resetSpectatorCamera(true);});
+            else if("STOP_SNEAKING".equals(action))submit(player,()->player.setSneaking(false));
+            else if("START_SPRINTING".equals(action))submit(player,()->player.setSprinting(true));
+            else if("STOP_SPRINTING".equals(action))submit(player,()->player.setSprinting(false));
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.PLAYER_ABILITIES) {
             boolean flying = new WrapperPlayClientPlayerAbilities(event).isFlying();
@@ -97,7 +103,20 @@ public final class VibGameplayPacketListener implements PacketListener {
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.HELD_ITEM_CHANGE) {
             int slot = new WrapperPlayClientHeldItemChange(event).getSlot();
-            submit(player, () -> player.setHeldItemSlot(slot));
+            submit(player, () -> {player.setHeldItemSlot(slot);player.broadcastEquipment();});
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.CLICK_WINDOW) {
+            WrapperPlayClientClickWindow wrapper = new WrapperPlayClientClickWindow(event);
+            int windowId = wrapper.getWindowId(), slot = wrapper.getSlot(), button = wrapper.getButton();
+            WrapperPlayClientClickWindow.WindowClickType clickType = wrapper.getWindowClickType();
+            int action = wrapper.getActionNumber().isPresent() ? wrapper.getActionNumber().get() : -1;
+            submit(player, () -> net.vibmc.inventory.WindowService.click(player, windowId, slot, button, clickType, action));
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.CLOSE_WINDOW) {
+            submit(player, () -> net.vibmc.inventory.WindowService.close(player, false));
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.USE_ITEM) {
+            submit(player, () -> net.vibmc.world.BlockInteractionService.useItem(player));
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
             WrapperPlayClientPlayerDigging wrapper = new WrapperPlayClientPlayerDigging(event);

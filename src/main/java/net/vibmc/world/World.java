@@ -20,6 +20,8 @@ public class World {
     private final WeatherSystem weatherSystem;
     private final WorldStorage storage;
     private final WorldEnvironment environment;
+    private final BlockUpdates blockUpdates = new BlockUpdates(this);
+    private final BlockEntities blockEntities = new BlockEntities();
     private final List<Entity> entities = new CopyOnWriteArrayList<>();
     private volatile long worldTime;
 
@@ -52,6 +54,8 @@ public class World {
     public void tick(long tick) {
         worldTime++;
         timeSystem.tick();
+        blockUpdates.tick(tick);
+        blockEntities.tick(this);
         if (tick % 100 == 0) {
             weatherSystem.tick();
         }
@@ -86,6 +90,29 @@ public class World {
         if (Blocks.same(chunk.getBlock(localX, y, localZ), block)) return false;
         chunk.setBlock(localX, y, localZ, block);
         return true;
+    }
+
+    /**
+     * Sets a block, tells every player who can see it, and queues the neighbour updates that
+     * make gravity, fluids, and supported blocks react. Gameplay should prefer this over
+     * {@link #setBlockAt}; world generation deliberately does not, so a generated ocean does
+     * not start flowing the moment it loads.
+     */
+    public boolean setBlockAndUpdate(int x, int y, int z, WrappedBlockState block) {
+        if (!setBlockAt(x, y, z, block)) return false;
+        net.vibmc.server.VibMC server = net.vibmc.server.VibMC.getInstance();
+        if (server != null) server.getPlayerManager().broadcastBlockChange(this, x, y, z, block);
+        blockUpdates.scheduleNeighbours(x, y, z);
+        return true;
+    }
+
+    public BlockUpdates blockUpdates() {
+        return blockUpdates;
+    }
+
+    /** Containers keyed by block position; chunk storage holds block states only. */
+    public BlockEntities blockEntities() {
+        return blockEntities;
     }
 
     public int getHighestBlockY(int x, int z) {

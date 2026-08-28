@@ -32,6 +32,11 @@ import java.util.zip.GZIPOutputStream;
  */
 public class WorldStorage {
     private static final int LEVEL_MAGIC = 0x56424C56;  // "VBLV"
+    private static final int CONTAINER_MAGIC = 0x56424354;  // "VBCT"
+    private static final int CONTAINER_VERSION = 1;
+    /** Guards against a corrupt file claiming an absurd number of containers. */
+    private static final int MAX_CONTAINERS = 1 << 16;
+    private static final int MAX_CONTAINER_SLOTS = 256;
     private static final int CHUNK_MAGIC = 0x5642434B;  // "VBCK"
     private static final int FORMAT_VERSION = 2;
 
@@ -98,6 +103,114 @@ public class WorldStorage {
             moveIntoPlace(tmp, levelFile);
         } finally {
             Files.deleteIfExists(tmp);
+        }
+    }
+
+    /**
+     * Chests and furnaces, keyed by packed block position. Chunk files hold block states only,
+     * so a container's contents live here instead.
+     */
+    public void writeContainers(net.vibmc.world.BlockEntities entities) throws IOException {
+        prepare();
+        java.util.Map<Long, net.vibmc.inventory.Inventory> chests = entities.all();
+        java.util.Map<Long, net.vibmc.world.Furnace> furnaces = entities.allFurnaces();
+        Path target = worldDir.resolve("containers.dat");
+        if (chests.isEmpty() && furnaces.isEmpty()) {
+            Files.deleteIfExists(target);
+            return;
+        }
+        Path temporary = worldDir.resolve("containers.dat.tmp");
+        try {
+            try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(
+                    new GZIPOutputStream(Files.newOutputStream(temporary))))) {
+                output.writeInt(CONTAINER_MAGIC);
+                output.writeInt(CONTAINER_VERSION);
+                output.writeInt(chests.size());
+                for (java.util.Map.Entry<Long, net.vibmc.inventory.Inventory> entry : chests.entrySet()) {
+                    output.writeLong(entry.getKey());
+                    writeSlots(output, entry.getValue().getSlots());
+                }
+                output.writeInt(furnaces.size());
+                for (java.util.Map.Entry<Long, net.vibmc.world.Furnace> entry : furnaces.entrySet()) {
+                    net.vibmc.world.Furnace furnace = entry.getValue();
+                    output.writeLong(entry.getKey());
+                    writeSlots(output, furnace.slots().getSlots());
+                    output.writeInt(furnace.burnTime());
+                    output.writeInt(furnace.burnTimeTotal());
+                    output.writeInt(furnace.cookTime());
+                }
+            }
+            move(temporary, target);
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    public void readContainers(net.vibmc.world.BlockEntities entities) throws IOException {
+        Path source = worldDir.resolve("containers.dat");
+        if (!Files.exists(source)) return;
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(
+                new GZIPInputStream(Files.newInputStream(source))))) {
+            if (input.readInt() != CONTAINER_MAGIC) throw new IOException("invalid container magic");
+            int version = input.readInt();
+            if (version != CONTAINER_VERSION) throw new IOException("unsupported container version " + version);
+            int chestCount = readCount(input, MAX_CONTAINERS, "container");
+            for (int index = 0; index < chestCount; index++) {
+                long position = input.readLong();
+                com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                net.vibmc.inventory.Inventory chest = entities.container(
+                        net.vibmc.world.BlockEntities.unpackX(position),
+                        net.vibmc.world.BlockEntities.unpackY(position),
+                        net.vibmc.world.BlockEntities.unpackZ(position),
+                        "Chest", Math.max(1, slots.length));
+                for (int slot = 0; slot < slots.length && slot < chest.getSize(); slot++) {
+                    chest.setSlot(slot, slots[slot]);
+                }
+            }
+            int furnaceCount = readCount(input, MAX_CONTAINERS, "furnace");
+            for (int index = 0; index < furnaceCount; index++) {
+                long position = input.readLong();
+                com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                net.vibmc.world.Furnace furnace = entities.furnace(
+                        net.vibmc.world.BlockEntities.unpackX(position),
+                        net.vibmc.world.BlockEntities.unpackY(position),
+                        net.vibmc.world.BlockEntities.unpackZ(position));
+                for (int slot = 0; slot < slots.length && slot < furnace.slots().getSize(); slot++) {
+                    furnace.slots().setSlot(slot, slots[slot]);
+                }
+                furnace.restoreState(input.readInt(), input.readInt(), input.readInt());
+            }
+        }
+    }
+
+    private static void writeSlots(DataOutputStream output,
+                                   com.github.retrooper.packetevents.protocol.item.ItemStack[] slots) throws IOException {
+        output.writeInt(slots.length);
+        for (com.github.retrooper.packetevents.protocol.item.ItemStack item : slots) {
+            net.vibmc.inventory.ItemCodec.writeItem(output, item);
+        }
+    }
+
+    private static com.github.retrooper.packetevents.protocol.item.ItemStack[] readSlots(
+            DataInputStream input) throws IOException {
+        int size = readCount(input, MAX_CONTAINER_SLOTS, "container slot");
+        com.github.retrooper.packetevents.protocol.item.ItemStack[] slots =
+                new com.github.retrooper.packetevents.protocol.item.ItemStack[size];
+        for (int slot = 0; slot < size; slot++) slots[slot] = net.vibmc.inventory.ItemCodec.readItem(input);
+        return slots;
+    }
+
+    private static int readCount(DataInputStream input, int limit, String label) throws IOException {
+        int count = input.readInt();
+        if (count < 0 || count > limit) throw new IOException("invalid " + label + " count " + count);
+        return count;
+    }
+
+    private void move(Path temporary, Path target) throws IOException {
+        try {
+            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

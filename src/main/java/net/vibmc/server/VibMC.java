@@ -107,7 +107,13 @@ public final class VibMC {
         pluginsEnabled = true;
         commandManager.startConsole();
 
-        tickThread = new Thread(this::tickLoop, "Server Tick");
+        tickThread = new Thread(() -> {
+            try {
+                tickLoop();
+            } finally {
+                if (running) logger.severe("Tick thread stopped while the server was still running");
+            }
+        }, "Server Tick");
         tickThread.setDaemon(true);
         tickThread.start();
 
@@ -155,7 +161,10 @@ public final class VibMC {
                         player.sendKeepAlive(keepAlive);
                     }
                 }
-            } catch (RuntimeException e) {
+            } catch (Throwable e) {
+                // Catching Throwable rather than RuntimeException is deliberate: an Error
+                // escaping here used to kill the tick thread outright, leaving the server
+                // accepting connections while nothing in the world ever advanced again.
                 logger.severe("Unhandled error during tick %d: %s", tickCounter, e);
             }
 
@@ -201,7 +210,7 @@ public final class VibMC {
             queuedMainThreadTaskCount.decrementAndGet();
             try {
                 task.run();
-            } catch (RuntimeException error) {
+            } catch (Throwable error) {
                 logger.severe("Unhandled error in main-thread task: %s", error);
             }
         }

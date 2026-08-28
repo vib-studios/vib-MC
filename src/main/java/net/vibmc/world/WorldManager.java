@@ -57,6 +57,11 @@ public final class WorldManager {
         }
 
         World world = new World(seed, name, storage, environment);
+        try {
+            storage.readContainers(world.blockEntities());
+        } catch (IOException e) {
+            warn("Could not read containers for '%s': %s", name, e.getMessage());
+        }
         if (restored != null) {
             world.setWorldTime(restored.worldTime());
             world.setTimeOfDay(restored.timeOfDay());
@@ -88,6 +93,11 @@ public final class WorldManager {
                         world.getDayTime(), world.weatherSystem().weather()));
             } catch (IOException e) {
                 warn("Failed to save level data for '%s': %s", world.name(), e);
+            }
+            try {
+                world.storage().writeContainers(world.blockEntities());
+            } catch (IOException e) {
+                warn("Failed to save containers for '%s': %s", world.name(), e);
             }
             written += world.chunkManager().saveAll();
         }

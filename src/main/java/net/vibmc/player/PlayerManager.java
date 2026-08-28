@@ -49,6 +49,7 @@ public class PlayerManager {
 
         server.getLogger().info("Player spawn at %.1f, %.1f, %.1f (chunk %d, %d)", player.getX(), player.getY(), player.getZ(), (int) Math.floor(player.getX()) >> 4, (int) Math.floor(player.getZ()) >> 4);
         sendJoinPackets(player);
+        broadcastEquipment(player);
         if (event.getJoinMessage() != null && !event.getJoinMessage().isEmpty()) {
             broadcastMessage(JsonText.component("§e" + event.getJoinMessage()));
         }
@@ -58,6 +59,9 @@ public class PlayerManager {
         for(ServerPlayer viewer:players.values()){
             if(player.getUuid().equals(viewer.getCameraTargetUuid()))viewer.resetSpectatorCamera(true);
         }
+        // Return anything on the cursor or in the crafting grid before the snapshot is taken,
+        // otherwise those items are silently destroyed on quit.
+        if (player.isInWorld()) net.vibmc.inventory.WindowService.close(player, false);
         boolean removed = players.remove(player.getUuid(), player);
         byName.remove(player.getUsername().toLowerCase(Locale.ROOT), player);
         if (!removed) {
@@ -160,6 +164,7 @@ public class PlayerManager {
     }
 
     public void respawnPlayer(ServerPlayer player){
+        net.vibmc.inventory.WindowService.close(player, false);
         if(player==null||player.isAlive()||!player.isInWorld())return;
         synchronized(player){
             player.resetSpectatorCamera(false);
@@ -280,7 +285,94 @@ public class PlayerManager {
     }
 
     private void sendInvisibleMetadata(User user, ServerPlayer player, boolean invisible) {
-        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata(player.getEntityId(),java.util.Collections.singletonList(new com.github.retrooper.packetevents.protocol.entity.data.EntityData<Byte>(0,com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes.BYTE,(byte)(invisible?0x20:0)))));
+        send(user,entityFlagsPacket(player,invisible));
+    }
+
+    /**
+     * Shared entity-flag byte. Invisibility (spectator) and the on-fire flag live in the same
+     * metadata index, so they have to be written together or one silently clears the other.
+     */
+    private static com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata entityFlagsPacket(ServerPlayer player,boolean invisible){
+        int flags=(invisible?0x20:0)|(player.isBurning()?0x01:0);
+        return new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata(player.getEntityId(),java.util.Collections.singletonList(new com.github.retrooper.packetevents.protocol.entity.data.EntityData<Byte>(0,com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes.BYTE,(byte)flags)));
+    }
+
+    /** Re-sends a player's entity flags to everyone who can see them, including themselves. */
+    public void broadcastEntityFlags(ServerPlayer changed){
+        boolean invisible=changed.getGameModeEnum()==GameMode.SPECTATOR;
+        for(ServerPlayer viewer:players.values()){
+            if(viewer.getWorld()!=changed.getWorld())continue;
+            send(viewer.getUser(),entityFlagsPacket(changed,invisible));
+        }
+    }
+
+    /** Held item and worn armour, so other players see equipment rather than a bare skin. */
+    public void broadcastEquipment(ServerPlayer changed){
+        java.util.List<com.github.retrooper.packetevents.protocol.player.Equipment> equipment=new java.util.ArrayList<>();
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.MAIN_HAND,changed.getInventory().getSlot(changed.getHeldItemSlot())));
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.OFF_HAND,changed.getOffhandItem()));
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.HELMET,changed.getArmorPiece(net.vibmc.inventory.Armor.HELMET)));
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.CHEST_PLATE,changed.getArmorPiece(net.vibmc.inventory.Armor.CHESTPLATE)));
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.LEGGINGS,changed.getArmorPiece(net.vibmc.inventory.Armor.LEGGINGS)));
+        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.BOOTS,changed.getArmorPiece(net.vibmc.inventory.Armor.BOOTS)));
+        for(ServerPlayer viewer:players.values()){
+            if(viewer==changed||viewer.getWorld()!=changed.getWorld())continue;
+            send(viewer.getUser(),new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment(changed.getEntityId(),equipment));
+        }
+    }
+
+    /**
+     * Sends a freshly built packet to every player within radius of a point. The factory runs
+     * per recipient because wrappers are single-use and some carry version-specific ids;
+     * returning null from it skips that player.
+     */
+    public void broadcastNear(net.vibmc.world.World world,double x,double y,double z,double radius,
+                              java.util.function.Function<ServerPlayer,com.github.retrooper.packetevents.wrapper.PacketWrapper<?>> factory){
+        double limit=radius*radius;
+        for(ServerPlayer player:players.values()){
+            if(!player.isInWorld()||player.getWorld()!=world)continue;
+            double dx=player.getX()-x,dy=player.getY()-y,dz=player.getZ()-z;
+            if(dx*dx+dy*dy+dz*dz>limit)continue;
+            com.github.retrooper.packetevents.wrapper.PacketWrapper<?> packet=factory.apply(player);
+            if(packet!=null)send(player.getUser(),packet);
+        }
+    }
+
+    /**
+     * Player-versus-player melee. vib-MC has no entity layer, so the only thing that can be
+     * attacked is another player; the attack is validated against the server's own positions
+     * rather than trusting the click.
+     */
+    public void handleAttack(ServerPlayer attacker,int targetEntityId){
+        if(attacker==null||!attacker.isInWorld()||!attacker.isAlive())return;
+        if(attacker.getGameModeEnum()==GameMode.SPECTATOR)return;
+        ServerPlayer target=null;
+        for(ServerPlayer online:players.values()){
+            if(online.getEntityId()==targetEntityId&&online.getWorld()==attacker.getWorld()){target=online;break;}
+        }
+        if(target==null||target==attacker||!target.isAlive())return;
+        double dx=target.getX()-attacker.getX(),dy=target.getY()-attacker.getY(),dz=target.getZ()-attacker.getZ();
+        double distance=dx*dx+dy*dy+dz*dz;
+        if(distance>36.0)return;
+        net.vibmc.world.Effects.animation(attacker,com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM);
+        float damage=net.vibmc.inventory.Weapons.attackDamage(attacker.getInventory().getSlot(attacker.getHeldItemSlot()));
+        if(!target.hurt(damage,net.vibmc.entity.DamageSource.PLAYER,attacker.getUsername()))return;
+        attacker.addExhaustion(0.1f);
+        net.vibmc.world.Effects.sound(attacker.getWorld(),target.getX(),target.getY(),target.getZ(),
+                com.github.retrooper.packetevents.protocol.sound.Sounds.ENTITY_PLAYER_ATTACK_STRONG,
+                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+        knockBack(target,dx,dz);
+    }
+
+    /** Vanilla-strength horizontal knockback, applied client-side through Entity Velocity. */
+    private void knockBack(ServerPlayer target,double dx,double dz){
+        double length=Math.sqrt(dx*dx+dz*dz);
+        if(length<1.0E-4)return;
+        double strength=0.4;
+        com.github.retrooper.packetevents.util.Vector3d velocity=new com.github.retrooper.packetevents.util.Vector3d(
+                dx/length*strength,0.36,dz/length*strength);
+        send(target.getUser(),new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityVelocity(
+                target.getEntityId(),velocity));
     }
 
     public void broadcastPlayerPosition(ServerPlayer moving) {
