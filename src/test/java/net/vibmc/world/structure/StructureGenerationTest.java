@@ -9,6 +9,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class StructureGenerationTest {
     @Test
+    void everyTestedSeedPlacesTheVillageOnDryLand() throws Exception {
+        StructureRegistry.clear();
+        StructureRegistry.reload();
+        for(long seed:new long[]{1L,2L,42L,777L,12345L,99999L}){
+            World world=new World(seed,"village-dry-"+seed);
+            int[] spawn=StructureRegistry.spawnPoint(world);
+            assertTrue(spawn!=null,"seed "+seed+" must place the spawn village");
+            net.vibmc.world.gen.TerrainGenerator terrain=new net.vibmc.world.gen.TerrainGenerator(seed);
+            int centerX=spawn[0],centerZ=spawn[1]+8;
+            for(int x=centerX-34;x<=centerX+34;x++)for(int z=centerZ-34;z<=centerZ+34;z++)
+                assertTrue(terrain.getHeight(x,z)>=world.getSeaLevel(),
+                        "seed "+seed+" built the village over water at "+x+","+z);
+        }
+        StructureRegistry.clear();
+    }
+
+    @Test
     void defaultTreeTemplateDecoratesNewChunks() throws Exception {
         StructureRegistry.clear();
         StructureRegistry.reload();
@@ -28,11 +45,14 @@ class StructureGenerationTest {
         StructureRegistry.reload();
         World world = new World(12345L, "village-test");
         int[] spawn = StructureRegistry.spawnPoint(world);
-        assertTrue(spawn != null && Math.abs(spawn[0] - 8) <= 72 && Math.abs(spawn[1] - 8) <= 72,
+        assertTrue(spawn != null && Math.abs(spawn[0] - 8) <= 1088 && Math.abs(spawn[1] - 8) <= 1088,
                 "configured village spawn must remain in the spawn search area");
         assertEquals(1, StructureRegistry.composites().size(), "village must be a registered composite structure");
         int centerX=spawn[0],centerZ=spawn[1]+8;
         net.vibmc.world.gen.TerrainGenerator terrain=new net.vibmc.world.gen.TerrainGenerator(world.seed());
+        for(int x=centerX-34;x<=centerX+34;x++)for(int z=centerZ-34;z<=centerZ+34;z++)
+            assertTrue(terrain.getHeight(x,z)>=world.getSeaLevel(),
+                    "the village footprint must stay out of the water; "+x+","+z+" is at y"+terrain.getHeight(x,z));
         int wellY=terrain.getHeight(centerX,centerZ);
         for(int x=centerX-1;x<=centerX+1;x++)for(int z=centerZ-1;z<=centerZ+1;z++)assertTrue(Blocks.same(world.getBlockAt(x,wellY,z),Blocks.WATER),"roads must not cover the well water");
         int[][] doors={{centerX-14,centerZ-11},{centerX+14,centerZ-11},{centerX-14,centerZ+11},{centerX+14,centerZ+11}};

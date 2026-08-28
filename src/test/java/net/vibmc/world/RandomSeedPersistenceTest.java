@@ -19,7 +19,9 @@ class RandomSeedPersistenceTest {
     void blankSeedIsChosenOnceAndRestoredFromLevelData() throws Exception {
         Path world = temporaryDirectory.resolve("random-world");
         Path properties = temporaryDirectory.resolve("server.properties");
-        Files.write(properties, ("level-name=" + world + "\nseed=\nallow-nether=false\nallow-end=false\n")
+        // Properties reads a backslash as an escape, so a Windows path has to be escaped.
+        String levelName = world.toString().replace("\\", "\\\\");
+        Files.write(properties, ("level-name=" + levelName + "\nseed=\nallow-nether=false\nallow-end=false\n")
                 .getBytes(StandardCharsets.ISO_8859_1));
         ServerConfig config = ServerConfig.load(properties);
         assertNull(config.configuredSeed());

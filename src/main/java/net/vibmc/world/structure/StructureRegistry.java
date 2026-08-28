@@ -10,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Registry and placement engine for standalone, pooled, nested, and composite structures. */
 public final class StructureRegistry {
+    /** Widest a composite structure looks for a dry footprint before settling for the best. */
+    private static final int MAX_PLACEMENT_RADIUS=1024;
     private static volatile Map<String,StructureTemplate> templates=Collections.emptyMap();
     private static volatile Map<String,StructurePool> pools=Collections.emptyMap();
     private static volatile Map<String,CompositeStructure> composites=Collections.emptyMap();
@@ -60,22 +62,29 @@ public final class StructureRegistry {
 
     private static void decorateComposite(WorldChunk chunk,World world,TerrainGenerator terrain,CompositeStructure composite){
         if(isCompositeExcluded(world,composite))return;
+        // Safety net for a column the placement search could not keep dry: no piece is ever
+        // anchored below the water line, so nothing generates submerged.
+        int minimumSurface=world.environment()==WorldEnvironment.OVERWORLD?world.getSeaLevel():Integer.MIN_VALUE;
         int[] center=placement(world,composite);int nodeIndex=0;
         for(CompositeStructure.Node node:composite.nodes()){
             StructureTemplate template=resolve(node.reference,terrain.hash(composite.salt()+nodeIndex,(int)world.seed()),0);
             int[] rotatedAnchor=rotate(template.anchorX(),template.anchorZ(),template.sizeX(),template.sizeZ(),node.rotation);
             int targetX=center[0]+node.x,targetZ=center[1]+node.z;
             int originX=targetX-rotatedAnchor[0],originZ=targetZ-rotatedAnchor[1];
-            int baseY=node.anchor==CompositeStructure.Anchor.TERRAIN?terrain.getHeight(targetX,targetZ)+node.y:node.y;
-            place(chunk,terrain,template,originX,baseY,originZ,node.rotation,node.anchor==CompositeStructure.Anchor.SURFACE);nodeIndex++;
+            int baseY=node.anchor==CompositeStructure.Anchor.TERRAIN?Math.max(terrain.getHeight(targetX,targetZ),minimumSurface)+node.y:node.y;
+            place(chunk,terrain,template,originX,baseY,originZ,node.rotation,node.anchor==CompositeStructure.Anchor.SURFACE,minimumSurface);nodeIndex++;
         }
     }
 
     private static void place(WorldChunk chunk,TerrainGenerator terrain,StructureTemplate template,int originX,int baseY,int originZ,int rotation,boolean surface){
+        place(chunk,terrain,template,originX,baseY,originZ,rotation,surface,Integer.MIN_VALUE);
+    }
+
+    private static void place(WorldChunk chunk,TerrainGenerator terrain,StructureTemplate template,int originX,int baseY,int originZ,int rotation,boolean surface,int minimumSurface){
         int normalized=Math.floorMod(rotation,360);if(normalized%90!=0)throw new IllegalArgumentException("rotation must be a multiple of 90");
         for(StructureTemplate.Entry entry:template.blocks()){
             int rx,rz;switch(normalized){case 90:rx=entry.z;rz=template.sizeX()-1-entry.x;break;case 180:rx=template.sizeX()-1-entry.x;rz=template.sizeZ()-1-entry.z;break;case 270:rx=template.sizeZ()-1-entry.z;rz=entry.x;break;default:rx=entry.x;rz=entry.z;}
-            int worldX=originX+rx,worldZ=originZ+rz,worldY=(surface?terrain.getHeight(worldX,worldZ)+baseY:baseY)+entry.y;
+            int worldX=originX+rx,worldZ=originZ+rz,worldY=(surface?Math.max(terrain.getHeight(worldX,worldZ),minimumSurface)+baseY:baseY)+entry.y;
             if(worldY<0||worldY>=256||Math.floorDiv(worldX,16)!=chunk.chunkX()||Math.floorDiv(worldZ,16)!=chunk.chunkZ())continue;
             WrappedBlockState existing=chunk.getBlock(Math.floorMod(worldX,16),worldY,Math.floorMod(worldZ,16));
             if(Blocks.same(entry.block,Blocks.LEAVES)&&!Blocks.same(existing,Blocks.AIR))continue;
@@ -115,16 +124,57 @@ public final class StructureRegistry {
         int choice=Math.floorMod(selection,total);for(StructurePool.Entry entry:pool.entries()){choice-=entry.weight;if(choice<0)return resolve(entry.reference,Integer.rotateLeft(selection*31+entry.reference.hashCode(),5),depth+1);}throw new AssertionError();
     }
 
+    /**
+     * Deterministic placement for a composite structure. The configured search radius is
+     * tried first and widened until the whole footprint sits above sea level - a village
+     * that only fitted in the ocean used to be built there anyway, drowning it and the
+     * spawn point derived from it.
+     */
     private static int[] placement(World world,CompositeStructure composite){
         String key=world.name()+":"+world.seed()+":"+composite.name();int[] cached=placementCache.get(key);if(cached!=null)return cached.clone();
-        TerrainGenerator terrain=new TerrainGenerator(world.seed());int bestX=8,bestZ=8,bestScore=Integer.MAX_VALUE,radius=composite.searchRadius(),footprint=composite.footprintRadius();
-        for(int z=8-radius;z<=8+radius;z+=4)for(int x=8-radius;x<=8+radius;x+=4){
-            int center=terrain.getHeight(x,z),minimum=center,maximum=center,wetSamples=0;
-            for(int sampleX=-footprint;sampleX<=footprint;sampleX+=8)for(int sampleZ=-footprint;sampleZ<=footprint;sampleZ+=8){int height=terrain.getHeight(x+sampleX,z+sampleZ);minimum=Math.min(minimum,height);maximum=Math.max(maximum,height);if(height<=63)wetSamples++;}
-            int spawnHeight=terrain.getHeight(x+composite.spawnX(),z+composite.spawnZ());if(spawnHeight<=63)wetSamples+=20;
-            int distance=(x-8)*(x-8)+(z-8)*(z-8),score=distance+(maximum-minimum)*32+wetSamples*5000;
-            if(center>63&&score<bestScore){bestScore=score;bestX=x;bestZ=z;}
+        HeightCache heights=new HeightCache(new TerrainGenerator(world.seed()));
+        int minimumGround=world.environment()==WorldEnvironment.OVERWORLD?world.getSeaLevel()+1:Integer.MIN_VALUE;
+        int[] best=null;
+        for(int radius=Math.max(16,composite.searchRadius());;radius*=2){
+            int[] candidate=searchPlacement(heights,composite,radius,minimumGround);
+            if(candidate!=null&&(best==null||candidate[2]<best[2]))best=candidate;
+            if(best!=null&&best[2]==0)break;
+            if(radius>=MAX_PLACEMENT_RADIUS)break;
         }
-        int[] result={bestX,bestZ};placementCache.put(key,result.clone());return result;
+        int[] result=best==null?new int[]{8,8}:new int[]{best[0],best[1]};
+        placementCache.put(key,result.clone());return result;
+    }
+
+    /**
+     * Best center within radius as {x, z, wetSamples}, or null when no column in range is
+     * above the minimum ground level. Dryness always outranks nearness and flatness.
+     */
+    private static int[] searchPlacement(HeightCache heights,CompositeStructure composite,int radius,int minimumGround){
+        int footprint=composite.footprintRadius(),step=Math.max(4,radius/16),sample=Math.max(4,footprint/8);
+        int bestX=0,bestZ=0,bestWet=Integer.MAX_VALUE,bestScore=Integer.MAX_VALUE;
+        for(int z=8-radius;z<=8+radius;z+=step)for(int x=8-radius;x<=8+radius;x+=step){
+            int center=heights.get(x,z);if(center<minimumGround)continue;
+            int minimum=center,maximum=center,wetSamples=0;
+            for(int sampleX=-footprint;sampleX<=footprint;sampleX+=sample)for(int sampleZ=-footprint;sampleZ<=footprint;sampleZ+=sample){
+                int height=heights.get(x+sampleX,z+sampleZ);minimum=Math.min(minimum,height);maximum=Math.max(maximum,height);
+                if(height<minimumGround)wetSamples++;
+            }
+            if(heights.get(x+composite.spawnX(),z+composite.spawnZ())<minimumGround)wetSamples+=20;
+            int distance=(x-8)*(x-8)+(z-8)*(z-8),score=distance+(maximum-minimum)*32;
+            if(wetSamples<bestWet||(wetSamples==bestWet&&score<bestScore)){bestWet=wetSamples;bestScore=score;bestX=x;bestZ=z;}
+        }
+        return bestWet==Integer.MAX_VALUE?null:new int[]{bestX,bestZ,bestWet};
+    }
+
+    /** Memoises terrain heights; the placement search resamples the same columns heavily. */
+    private static final class HeightCache {
+        private final TerrainGenerator terrain;
+        private final Map<Long,Integer> heights=new HashMap<>();
+        HeightCache(TerrainGenerator terrain){this.terrain=terrain;}
+        int get(int x,int z){
+            Long key=((long)x<<32)^(z&0xffffffffL);Integer height=heights.get(key);
+            if(height==null){height=terrain.getHeight(x,z);heights.put(key,height);}
+            return height;
+        }
     }
 }

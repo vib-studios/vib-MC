@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class World {
+    /** Widest the expanding dry-spawn search will look before building land instead. */
+    private static final int MAX_DRY_SPAWN_RADIUS = 4096;
+
     private final long seed;
     private final String name;
     private final ChunkManager chunkManager;
@@ -121,32 +124,102 @@ public class World {
         return 0;
     }
 
-    /** Finds the nearest dry-land spawn column within radius, starting from (x, z). */
+    /**
+     * Finds the nearest dry-land spawn column, starting from (x, z).
+     *
+     * The requested radius is scanned block-accurately first. An all-ocean neighbourhood
+     * used to fall back to the starting column, which is how players ended up spawning in
+     * water; instead the search now keeps widening against the terrain generator until it
+     * finds land. Only genuinely dry columns are ever returned.
+     */
     public int[] findDrySpawn(int x, int z, int radius) {
         if (radius < 0) {
             throw new IllegalArgumentException("radius cannot be negative");
         }
-        int bestX = x;
-        int bestZ = z;
+        int[] near = scanDrySpawn(x, z, radius);
+        if (near != null) return near;
+        int[] far = projectDrySpawn(x, z, radius);
+        if (far != null) return far;
+        return new int[]{x, z};
+    }
+
+    /** Block-accurate scan; null when every column in range is wet or obstructed. */
+    private int[] scanDrySpawn(int x, int z, int radius) {
+        int bestX = 0;
+        int bestZ = 0;
         int bestDistance = Integer.MAX_VALUE;
         for (int dz = -radius; dz <= radius; dz++) {
             for (int dx = -radius; dx <= radius; dx++) {
-                int worldX = x + dx;
-                int worldZ = z + dz;
-                int surfaceY = getTerrainSurfaceY(worldX, worldZ);
-                if (surfaceY >= getSeaLevel()
-                        && Blocks.same(getBlockAt(worldX, surfaceY + 1, worldZ), Blocks.AIR)
-                        && Blocks.same(getBlockAt(worldX, surfaceY + 2, worldZ), Blocks.AIR)) {
-                    int distance = dx * dx + dz * dz;
-                    if (distance < bestDistance) {
-                        bestDistance = distance;
-                        bestX = worldX;
-                        bestZ = worldZ;
-                    }
-                }
+                int distance = dx * dx + dz * dz;
+                if (distance >= bestDistance) continue;
+                if (!isDryStandingColumn(x + dx, z + dz)) continue;
+                bestDistance = distance;
+                bestX = x + dx;
+                bestZ = z + dz;
             }
         }
-        return new int[]{bestX, bestZ};
+        return bestDistance == Integer.MAX_VALUE ? null : new int[]{bestX, bestZ};
+    }
+
+    /** A surface at or above sea level with two blocks of air to stand in. */
+    public boolean isDryStandingColumn(int x, int z) {
+        int surfaceY = getTerrainSurfaceY(x, z);
+        return surfaceY >= getSeaLevel()
+                && Blocks.same(getBlockAt(x, surfaceY + 1, z), Blocks.AIR)
+                && Blocks.same(getBlockAt(x, surfaceY + 2, z), Blocks.AIR);
+    }
+
+    /**
+     * Widens the search beyond an all-ocean neighbourhood. Candidate columns come from the
+     * terrain generator - probing real blocks this far out would generate thousands of
+     * chunks - and the winner is confirmed against generated blocks before it is returned.
+     */
+    private int[] projectDrySpawn(int originX, int originZ, int scanned) {
+        if (environment != WorldEnvironment.OVERWORLD) return null;
+        net.vibmc.world.gen.TerrainGenerator terrain = new net.vibmc.world.gen.TerrainGenerator(seed);
+        int alreadyScanned = scanned * scanned;
+        for (int radius = Math.max(scanned * 2, 64); radius <= MAX_DRY_SPAWN_RADIUS; radius *= 2) {
+            int step = Math.max(1, radius / 64);
+            int bestX = 0;
+            int bestZ = 0;
+            int bestDistance = Integer.MAX_VALUE;
+            for (int dz = -radius; dz <= radius; dz += step) {
+                for (int dx = -radius; dx <= radius; dx += step) {
+                    int distance = dx * dx + dz * dz;
+                    if (distance >= bestDistance || distance <= alreadyScanned) continue;
+                    if (terrain.getHeight(originX + dx, originZ + dz) < getSeaLevel()) continue;
+                    bestDistance = distance;
+                    bestX = originX + dx;
+                    bestZ = originZ + dz;
+                }
+            }
+            if (bestDistance == Integer.MAX_VALUE) continue;
+            int[] confirmed = scanDrySpawn(bestX, bestZ, 16);
+            if (confirmed != null) return confirmed;
+        }
+        return null;
+    }
+
+    /**
+     * Last-resort spawn guarantee for a world with no reachable land: turns (x, z) into a
+     * dry standing column by replacing the water above the seabed with sand. Other
+     * dimensions have no water table and keep their own safe-spawn search.
+     */
+    public int createDryPlatform(int x, int z) {
+        if (environment != WorldEnvironment.OVERWORLD) return findSafeSpawnY(x, z);
+        int floorY = Math.max(getHighestSolidY(x, z), getSeaLevel());
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                int columnX = x + dx;
+                int columnZ = z + dz;
+                for (int y = Math.max(1, getHighestSolidY(columnX, columnZ)); y <= floorY; y++) {
+                    setBlockAt(columnX, y, columnZ, Blocks.SAND);
+                }
+                setBlockAt(columnX, floorY + 1, columnZ, Blocks.AIR);
+                setBlockAt(columnX, floorY + 2, columnZ, Blocks.AIR);
+            }
+        }
+        return floorY + 1;
     }
 
     public int findSafeSpawnY(int x, int z) {

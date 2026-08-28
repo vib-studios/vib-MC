@@ -127,7 +127,18 @@ public class ServerPlayer extends Entity {
         if(!isSafeStandingPosition(dry[0]+0.5,safeY,dry[1]+0.5)){
             dry=world.findDrySpawn(8,8,96);safeY=world.findSafeSpawnY(dry[0],dry[1]);
         }
+        // Nothing dry anywhere the search could reach: build land rather than spawn in water.
+        if(!isSafeStandingPosition(dry[0]+0.5,safeY,dry[1]+0.5))safeY=world.createDryPlatform(dry[0],dry[1]);
         setPosition(dry[0]+0.5,safeY,dry[1]+0.5);
+    }
+
+    /** True when the block at the player's feet or head is water. */
+    public boolean isSubmerged(){
+        if(!isInWorld())return false;
+        int bx=(int)Math.floor(x),by=(int)Math.floor(y),bz=(int)Math.floor(z);
+        if(by<0||by>=255)return false;
+        return net.vibmc.world.Blocks.same(world.getBlockAt(bx,by,bz),net.vibmc.world.Blocks.WATER)
+                ||net.vibmc.world.Blocks.same(world.getBlockAt(bx,by+1,bz),net.vibmc.world.Blocks.WATER);
     }
 
     private boolean isSafeStandingPosition(double testX,double testY,double testZ){
@@ -154,12 +165,18 @@ public class ServerPlayer extends Entity {
             sendHealth();
             voidDamageCooldown = 10;
         }
-        if (floatingCandidate) {
+        // Re-checked every tick, not just when a movement packet arrives: the flag is sticky
+        // and a creative player who stops sending positions (dimension change, unconfirmed
+        // teleport) must never be kicked for a survival-era flag.
+        if (floatingCandidate && !isFloatingCheckExempt()) {
             floatingTicks++;
             if (floatingTicks > 80 && user != null) {
-                send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(net.kyori.adventure.text.Component.text("Flying is not enabled on this server")));
+                floatingTicks = 0;
+                floatingCandidate = false;
+                disconnect("Flying is not enabled on this server");
             }
         } else {
+            floatingCandidate = false;
             floatingTicks = 0;
         }
         tickPortal();
@@ -218,14 +235,22 @@ public class ServerPlayer extends Entity {
         if(teleportId==pendingTeleportId){pendingTeleportId=-1;movementGraceTicks=Math.max(movementGraceTicks,20);}
     }
 
+    /**
+     * Anyone allowed to leave the ground is exempt from the floating check: creative and
+     * spectator players, anyone the server granted flight, an active movement grace window,
+     * and a player whose movement is being ignored while a teleport is unconfirmed.
+     */
+    boolean isFloatingCheckExempt() {
+        return allowFlight || flying || gameMode == GameMode.CREATIVE || gameMode == GameMode.SPECTATOR
+                || movementGraceTicks > 0 || isAwaitingTeleportConfirmation();
+    }
+
     /** Vanilla-style lenient floating check; all other legal movement is accepted. */
     public void handleClientMovement(boolean reportedOnGround) {
         double currentY = getY();
         double groundY = getWorld().getHighestSolidY(
                 (int) Math.floor(getX()), (int) Math.floor(getZ())) + 1.0;
-        boolean exempt = allowFlight || gameMode == GameMode.CREATIVE
-                || gameMode == GameMode.SPECTATOR || movementGraceTicks > 0;
-        if (exempt || reportedOnGround || currentY <= groundY + 0.5) {
+        if (isFloatingCheckExempt() || reportedOnGround || currentY <= groundY + 0.5) {
             floatingCandidate = false;
         } else {
             floatingCandidate = hasClientPosition && currentY - lastClientY >= -0.03125;
@@ -303,13 +328,17 @@ public class ServerPlayer extends Entity {
         this.gameMode = gameMode;
         boolean unrestricted = gameMode == GameMode.CREATIVE || gameMode == GameMode.SPECTATOR;
         setInvulnerable(unrestricted);
-        allowFlight = unrestricted || VibMC.getInstance().getConfig().allowFlight();
+        VibMC running = VibMC.getInstance();
+        allowFlight = unrestricted || (running != null && running.getConfig().allowFlight());
         if (gameMode == GameMode.SPECTATOR) flying = true;
         else if (!allowFlight) flying = false;
+        if (isFloatingCheckExempt()) {
+            floatingCandidate = false;
+            floatingTicks = 0;
+        }
         if(user!=null)send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChangeGameState(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChangeGameState.Reason.CHANGE_GAME_MODE,getGameMode()));
         sendAbilities();
-        VibMC server = VibMC.getInstance();
-        if (server != null) server.getPlayerManager().updateGameModeVisibility(this);
+        if (running != null) running.getPlayerManager().updateGameModeVisibility(this);
     }
 
     public void acknowledgeBlockChange(int sequence){
@@ -416,6 +445,9 @@ public class ServerPlayer extends Entity {
         for (int slot = 0; slot < length; slot++) inventory.setSlot(slot, data.inventory[slot]);
         onGround = false;
         movementGraceTicks = 100;
+        // A stored position inside water would drown the player on login; creative and
+        // spectator players keep whatever position they logged out at.
+        if (gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR && isSubmerged()) ensureSafePosition();
         resetChunkStreaming();
     }
 
