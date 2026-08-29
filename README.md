@@ -7,21 +7,35 @@
 [![Vibecoded](https://img.shields.io/badge/Vibecoded-ff69b4?style=for-the-badge)]()
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.8--26.1.2-blue?style=for-the-badge&logo=minecraft)]()
 [![License: GPL--3.0](https://img.shields.io/badge/License-GPL--3.0-yellow?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.0.6-blue?style=for-the-badge)](https://github.com/vib-studios/vib-MC/releases/tag/v0.0.6)
+[![Release](https://img.shields.io/badge/Release-v0.0.7-blue?style=for-the-badge)](https://github.com/vib-studios/vib-MC/releases/tag/v0.0.7)
 
 **vibed into existence** — a Minecraft server made entirely by AI, one prompt at a time.
+
+**Minecraft 1.8 → 26.1.2** — excluding 1.16, 1.16.1 and 1.19.3
 
 </div>
 
 ---
 
-`vib-MC` is an experimental Minecraft Java Edition server implementation built from scratch and developed through AI-assisted/vibecoded development.
+`vib-MC` is a Minecraft Java Edition server implementation built from scratch through AI-assisted/vibecoded development — no vanilla code, no Bukkit fork, just prompts, one at a time. It started as an experiment in "can this even connect", and it is now a real, playable server: clients from **Minecraft 1.8 through 26.1.2** (excluding 1.16, 1.16.1 and 1.19.3) can join the same server, walk around persistent procedurally generated worlds, and — as of v0.0.7 — actually play survival.
 
 The project focuses on experimenting with Minecraft server internals, custom world generation, persistence, multiplayer, plugins, and making the server easy to extend.
 
 vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may, while unlikly, change without migration, and resets could be required at any time.
 
-## Latest Release — v0.0.6
+## Latest Release — v0.0.7 — the survival release
+
+**v0.0.7 is where vib-MC stops being a world you look at and becomes one you can play.** Blocks drop what you break, tools wear out, sand and gravel fall, water and lava flow, leaves decay, and ore generates in veins. You can starve, drown, suffocate, burn and fall — and heal again when you are fed. Crafting works in your inventory and at a crafting table, furnaces smelt, chests keep 27 slots across restarts, armour reduces damage, and PvP hits back with knockback. Blocks, damage and deaths finally make sounds.
+
+No mobs yet, and no item entities — drops go straight into your inventory. vib-MC is not a Vanilla or Paper replacement, and not every Minecraft mechanic is implemented, but the survival loop is real.
+
+### Multi-version support
+
+vib-MC accepts Minecraft Java Edition clients from **1.8 through 26.1.2**, over PacketEvents-based multi-version networking on top of Netty.
+
+Explicitly **not** supported: **1.16**, **1.16.1** and **1.19.3** — those three are rejected at handshake (see [Protocol version model](#protocol-version-model) for why).
+
+## Previous Release — v0.0.6
 
 v0.0.6 - Add PacketEvents-based protocol handling, player storage, world persistence and generation, structure resources, updated tests, and supporting development tools.
 
@@ -85,7 +99,7 @@ For an existing world, the seed stored in `level.dat` takes priority over the co
 | Status | Feature |
 |:------:|---------|
 | ✅ | Server startup |
-| ✅ | Minecraft 1.12.2 client connections |
+| ✅ | Minecraft 1.8 – 26.1.2 client connections (except 1.16, 1.16.1, 1.19.3) |
 | ✅ | Custom world generation |
 | ✅ | Chunk generation and streaming |
 | ✅ | Players appear in each other's tab list and world |
@@ -105,6 +119,12 @@ For an existing world, the seed stored in `level.dat` takes priority over the co
 | ✅ | Per-column biome data sent to clients |
 | ✅ | Data-driven structure templates with default oak trees |
 | ✅ | Nether |
+| ✅ | Block breaking, placement and block drops |
+| ✅ | Block physics — falling sand/gravel, flowing water and lava, leaf decay |
+| ✅ | Hunger, food and damage (fall, void, drowning, suffocation, fire, lava, cactus, starvation) |
+| ✅ | Crafting, smelting and chest storage |
+| ✅ | Armour and PvP combat |
+| ❌ | Mobs |
 
 ## World Generation
 
@@ -265,7 +285,9 @@ npm run test:dimensions
 | ✅ | v0.0.4-hotfix.3 |
 | ✅ | v0.0.5 - stable |
 | ✅ | v0.0.5-hotfix.1 |
-| 🚀 | **v0.0.6 - PacketEvents & Netty based networking w/ multi-version**  |
+| ✅ | v0.0.6 - PacketEvents & Netty based networking w/ multi-version |
+| ✅ | v0.0.6-hotfix.1 |
+| 🚀 | **v0.0.7 - survival: drops, physics, hunger, crafting, smelting, storage, combat** |
 
 ## License
 
