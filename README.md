@@ -21,7 +21,7 @@
 
 The project focuses on experimenting with Minecraft server internals, custom world generation, persistence, multiplayer, plugins, and making the server easy to extend.
 
-vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may, while unlikly, change without migration, and resets could be required at any time.
+vib-MC is a hobby/experimental project and is not intended to replace mature server software such as Paper or Vanilla. Development is rapid and early: world and player-data formats may, while unlikely, change without migration, and resets could be required at any time.
 
 ## Latest Release — v0.0.7 — the survival release
 
@@ -88,6 +88,7 @@ shutdown-message=Server closed
 ```text
 world/
 ├── level.dat            seed, time, weather, and world metadata
+├── containers.dat       chest and furnace contents
 └── region/
     └── r.<x>.<z>.chunk  gzipped chunk data
 ```
@@ -236,16 +237,20 @@ Current commands include:
 ## Architecture
 
 ```text
-net.vibmc.server        — server core
-net.vibmc.network       — Minecraft networking
-net.vibmc.world         — world and block systems
-net.vibmc.world.gen     — world generation
-net.vibmc.world.storage — world persistence
-net.vibmc.entity        — entities
-net.vibmc.player        — players
-net.vibmc.plugin        — plugin support
-net.vibmc.command       — commands
-net.vibmc.permission    — permissions
+net.vibmc.server          — server core
+net.vibmc.network         — Minecraft networking
+net.vibmc.world           — world and block systems
+net.vibmc.world.gen       — world generation
+net.vibmc.world.storage   — world persistence
+net.vibmc.world.structure — data-driven structures
+net.vibmc.entity          — entities
+net.vibmc.player          — players
+net.vibmc.inventory       — inventories, windows, and item data
+net.vibmc.crafting        — recipes and smelting
+net.vibmc.registry        — vendored Minecraft data registries
+net.vibmc.plugin          — plugin support
+net.vibmc.command         — commands
+net.vibmc.permission      — permissions
 ```
 
 ## Requirements
@@ -262,15 +267,19 @@ For building from source, use the repository's Gradle wrapper when available:
 
 The resulting server JAR is produced under `build/libs/`.
 
-With a local server running, the protocol tests can verify terrain streaming and two-player visibility:
+With a local server running, the protocol tests drive real clients against it:
 
 ```bash
 cd tools
 npm ci
-npm test
-npm run test:players
-npm run test:dimensions
+npm test                  # terrain streaming
+npm run test:players      # two-player visibility
+npm run test:dimensions   # Nether and End travel
+npm run test:survival     # drops, physics, crafting, containers
+npm run test:versions     # client connections across protocol versions
 ```
+
+`tools/package.json` lists the remaining suites.
 
 ## Version History
 
