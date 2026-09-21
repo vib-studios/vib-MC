@@ -2,6 +2,7 @@ package net.vibmc.world;
 
 import net.vibmc.server.VibMC;
 import net.vibmc.server.util.Logger;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.storage.WorldStorage;
 
 import java.io.IOException;
@@ -32,7 +33,7 @@ public final class ChunkManager {
 
     private WorldChunk loadOrGenerate(int chunkX, int chunkZ) {
         try {
-            com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] stored = storage.readChunk(chunkX, chunkZ);
+            BlockState[] stored = storage.readChunk(chunkX, chunkZ);
             if (stored != null) {
                 return WorldChunk.fromStored(world, chunkX, chunkZ, stored);
             }

@@ -1,9 +1,5 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientClickWindow.WindowClickType;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.world.BlockEntities;
@@ -18,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Window click handling for the player inventory and for open containers. */
 class WindowServiceTest {
     private static ItemStack stack(ItemType type, int amount) {
-        return ItemStack.builder().type(type).amount(amount).version(ClientVersion.V_1_12_2).build();
+        return ItemStack.builder().type(type).amount(amount).build();
     }
 
     private static ServerPlayer player() {

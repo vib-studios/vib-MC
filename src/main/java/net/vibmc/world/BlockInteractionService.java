@@ -1,12 +1,14 @@
 package net.vibmc.world;
 
 import net.vibmc.entity.ServerPlayer;
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemTypes;
+import net.vibmc.mappings.Mappings;
 import net.vibmc.player.GameMode;
 import net.vibmc.server.VibMC;
+import net.vibmc.world.block.BlockState;
+import net.vibmc.world.block.BlockType;
+import net.vibmc.world.block.StateValue;
 
 import java.util.List;
 import java.util.Random;
@@ -39,17 +41,16 @@ public final class BlockInteractionService {
             player.sendInventory();
         }
         Effects.sound(player.getWorld(), player.getX(), player.getY(), player.getZ(),
-                com.github.retrooper.packetevents.protocol.sound.Sounds.ENTITY_PLAYER_BURP,
-                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER, 0.5f, 1.0f);
+                "entity.player.burp", Effects.Category.PLAYERS, 0.5f, 1.0f);
     }
 
     public static void dig(ServerPlayer player, int status, int x, int y, int z) {
         World world = player.getWorld();
-        WrappedBlockState existing = world.getBlockAt(x, y, z);
+        BlockState existing = world.getBlockAt(x, y, z);
         boolean complete = status == 2 || (status == 0
-                && (player.getGameModeEnum() == GameMode.CREATIVE || Blocks.same(existing,Blocks.FIRE)));
+                && (player.getGameModeEnum() == GameMode.CREATIVE || Blocks.same(existing, Blocks.FIRE)));
         if (!complete) return;
-        if (Blocks.same(existing,Blocks.AIR) || Blocks.same(existing,Blocks.BEDROCK)) return;
+        if (Blocks.same(existing, Blocks.AIR) || Blocks.same(existing, Blocks.BEDROCK)) return;
         if (!world.setBlockAndUpdate(x, y, z, Blocks.AIR)) return;
         Effects.blockBreak(world, x, y, z, existing);
         // Breaking a container spills nothing (there are no item entities), so hand the
@@ -90,7 +91,7 @@ public final class BlockInteractionService {
             List<int[]> activated = PortalDetector.insertEyeAndActivate(world, clickedX, clickedY, clickedZ);
             broadcast(world, clickedX, clickedY, clickedZ, world.getBlockAt(clickedX, clickedY, clickedZ));
             for (int[] position : activated) broadcast(world, position[0], position[1], position[2], Blocks.END_PORTAL);
-            if (player.getGameModeEnum() != GameMode.CREATIVE) { player.getInventory().removeItem(player.getHeldItemSlot(),1); player.sendInventory(); }
+            if (player.getGameModeEnum() != GameMode.CREATIVE) { player.getInventory().removeItem(player.getHeldItemSlot(), 1); player.sendInventory(); }
             return;
         }
         if (held.getType() == ItemTypes.FLINT_AND_STEEL) {
@@ -98,24 +99,30 @@ public final class BlockInteractionService {
             for (int[] position : activated) {
                 broadcast(world, position[0], position[1], position[2], Blocks.NETHER_PORTAL);
             }
-            if (!activated.isEmpty() && player.getGameModeEnum()!=GameMode.CREATIVE) { held.setDamageValue(held.getDamageValue()+1);if(held.getMaxDamage()>0&&held.getDamageValue()>=held.getMaxDamage())held.setAmount(0);player.getInventory().setSlot(player.getHeldItemSlot(),held);player.sendInventory(); }
+            if (!activated.isEmpty() && player.getGameModeEnum() != GameMode.CREATIVE) {
+                held.setDamageValue(held.getDamageValue() + 1);
+                if (held.getMaxDamage() > 0 && held.getDamageValue() >= held.getMaxDamage()) held.setAmount(0);
+                player.getInventory().setSlot(player.getHeldItemSlot(), held);
+                player.sendInventory();
+            }
             return;
         }
         // 1.8-1.12.2 have no Use Item packet: right-clicking the air arrives here with an
         // out-of-range face, which is how eating reaches the server on those versions.
         if (face < 0 || face >= FACE_OFFSETS.length) { useItem(player); return; }
-        WrappedBlockState block = blockFor(held);
-        if (Blocks.same(block,Blocks.AIR)) return;
+        BlockState block = blockFor(held);
+        if (Blocks.same(block, Blocks.AIR)) return;
         block = orientForPlacement(block, player, face);
         int[] offset = FACE_OFFSETS[face];
         int x = clickedX + offset[0];
         int y = clickedY + offset[1];
         int z = clickedZ + offset[2];
-        int playerX=(int)Math.floor(player.getX()),playerZ=(int)Math.floor(player.getZ());
-        int feetY=(int)Math.floor(player.getY());
-        if(x==playerX&&z==playerZ&&(y==feetY||y==feetY+1))return;
-        WrappedBlockState replaced = world.getBlockAt(x, y, z);
-        if (!Blocks.same(replaced,Blocks.AIR) && !Blocks.same(replaced,Blocks.WATER) && !Blocks.same(replaced,Blocks.LAVA)) return;
+        int playerX = (int) Math.floor(player.getX()), playerZ = (int) Math.floor(player.getZ());
+        int feetY = (int) Math.floor(player.getY());
+        if (x == playerX && z == playerZ && (y == feetY || y == feetY + 1)) return;
+        BlockState replaced = world.getBlockAt(x, y, z);
+        if (!Blocks.same(replaced, Blocks.AIR) && !Blocks.same(replaced, Blocks.WATER)
+                && !Blocks.same(replaced, Blocks.LAVA)) return;
         if (world.setBlockAndUpdate(x, y, z, block)) {
             Effects.blockPlace(world, x, y, z, block);
             if (player.getGameModeEnum() != GameMode.CREATIVE) {
@@ -128,24 +135,23 @@ public final class BlockInteractionService {
     /** Right-clicking a chest, crafting table, or furnace opens its window. */
     private static boolean openContainer(ServerPlayer player, World world, int x, int y, int z) {
         if (player.getGameModeEnum() == GameMode.SPECTATOR) return false;
-        WrappedBlockState clicked = world.getBlockAt(x, y, z);
+        BlockState clicked = world.getBlockAt(x, y, z);
         if (player.isSneaking() && !player.getInventory().getSlot(player.getHeldItemSlot()).isEmpty()) return false;
         net.vibmc.inventory.WindowSession session;
-        if (Blocks.isType(clicked, com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.CHEST)) {
+        if (Blocks.isType(clicked, BlockType.of("chest"))) {
             net.vibmc.inventory.Inventory contents = world.blockEntities()
                     .container(x, y, z, "Chest", net.vibmc.world.BlockEntities.CHEST_SIZE);
             session = new net.vibmc.inventory.WindowSession(player.nextWindowId(),
                     net.vibmc.inventory.WindowSession.Type.CHEST, contents, null,
                     net.vibmc.world.BlockEntities.pack(x, y, z));
             Effects.sound(world, x + 0.5, y + 0.5, z + 0.5,
-                    com.github.retrooper.packetevents.protocol.sound.Sounds.BLOCK_CHEST_OPEN,
-                    com.github.retrooper.packetevents.protocol.sound.SoundCategory.BLOCK, 0.5f, 1.0f);
-        } else if (Blocks.isType(clicked, com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.FURNACE)) {
+                    "block.chest.open", Effects.Category.BLOCKS, 0.5f, 1.0f);
+        } else if (Blocks.isType(clicked, BlockType.of("furnace"))) {
             session = new net.vibmc.inventory.WindowSession(player.nextWindowId(),
                     net.vibmc.inventory.WindowSession.Type.FURNACE,
                     world.blockEntities().furnace(x, y, z).slots(), null,
                     net.vibmc.world.BlockEntities.pack(x, y, z));
-        } else if (Blocks.isType(clicked, com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.CRAFTING_TABLE)) {
+        } else if (Blocks.isType(clicked, BlockType.of("crafting_table"))) {
             session = new net.vibmc.inventory.WindowSession(player.nextWindowId(),
                     net.vibmc.inventory.WindowSession.Type.CRAFTING_TABLE, null,
                     new net.vibmc.crafting.CraftingGrid(3), net.vibmc.world.BlockEntities.pack(x, y, z));
@@ -156,74 +162,58 @@ public final class BlockInteractionService {
         return true;
     }
 
-    private static void broadcast(World world, int x, int y, int z, WrappedBlockState block) {
+    private static void broadcast(World world, int x, int y, int z, BlockState block) {
         VibMC server = VibMC.getInstance();
         if (server != null) server.getPlayerManager().broadcastBlockChange(world, x, y, z, block);
     }
 
-    private static WrappedBlockState blockFor(ItemStack held) {
-        if(held==null||held.isEmpty())return Blocks.AIR;
-        ItemType type=held.getType();
-        com.github.retrooper.packetevents.protocol.world.states.type.StateType placed=type.getPlacedType();
-        if(placed==null||placed.isAir())return Blocks.AIR;
-        WrappedBlockState state=placed.createBlockState(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_12_2);
-        if(state==null)return Blocks.AIR;
-        // Legacy inventory decoding may expose a generic item type plus its variant metadata.
-        // Apply that metadata to the canonical combined block ID before placement.
-        int legacyData=held.getLegacyData();
-        if(legacyData>0&&legacyData<=15)state=WrappedBlockState.getByGlobalId(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_12_2,
-                (state.getGlobalId()&~0x0f)|(legacyData&0x0f),true);
-        return state;
+    /** The block an item places, defaulting to its variant metadata when meaningful. */
+    private static BlockState blockFor(ItemStack held) {
+        if (held == null || held.isEmpty()) return Blocks.AIR;
+        String name = held.getType().name();
+        if (!Mappings.isBlock(name)) return Blocks.AIR;
+        // The inventory may hold a variant like granite (stone damage 1) or spruce planks
+        // (oak_planks damage 1); that metadata selects the placed block state. The stored
+        // combined id resolves to the true block name for carpets, planks and logs alike.
+        int variant = held.getDamageValue();
+        if (variant > 0 && variant <= 15) {
+            String resolved = Mappings.blockName((Mappings.blockId(name) & ~0xF) | variant);
+            return BlockState.of(resolved);
+        }
+        return BlockState.of(name);
     }
 
-    /** Applies the common vanilla orientation properties using PE's typed state API. */
-    private static WrappedBlockState orientForPlacement(WrappedBlockState original,
-                                                         ServerPlayer player, int faceId) {
-        WrappedBlockState state=original.clone();
-        com.github.retrooper.packetevents.protocol.world.BlockFace clicked=
-                com.github.retrooper.packetevents.protocol.world.BlockFace.getLegacyBlockFaceByValue(faceId);
-        com.github.retrooper.packetevents.protocol.world.BlockFace playerFacing=horizontalFacing(player.getYaw());
-
-        if(state.hasProperty(com.github.retrooper.packetevents.protocol.world.states.type.StateValue.AXIS)){
-            com.github.retrooper.packetevents.protocol.world.states.enums.Axis axis;
-            switch(clicked){
-                case EAST:case WEST:axis=com.github.retrooper.packetevents.protocol.world.states.enums.Axis.X;break;
-                case NORTH:case SOUTH:axis=com.github.retrooper.packetevents.protocol.world.states.enums.Axis.Z;break;
-                default:axis=com.github.retrooper.packetevents.protocol.world.states.enums.Axis.Y;
-            }
-            state.setAxis(axis);
+    /** Applies the common vanilla orientation data bits a placed block carries. */
+    private static BlockState orientForPlacement(BlockState original, ServerPlayer player, int faceId) {
+        BlockState block = original.clone();
+        if (block.hasProperty(StateValue.AXIS)) {
+            int axisBits = faceId == 4 || faceId == 5 ? 0x4      // x
+                    : faceId == 2 || faceId == 3 ? 0x8          // z
+                    : 0x0;                                      // y
+            block.setData((block.getData() & ~0xC) | axisBits);
         }
-        if(state.hasProperty(com.github.retrooper.packetevents.protocol.world.states.type.StateValue.FACING)){
-            state.setFacing(playerFacing);
+        if (block.hasProperty(StateValue.FACING)) {
+            block.setFacing(blockFacing(player.getYaw()));
         }
-        if(state.hasProperty(com.github.retrooper.packetevents.protocol.world.states.type.StateValue.HALF)){
-            com.github.retrooper.packetevents.protocol.world.states.enums.Half current=state.getHalf();
-            if(current==com.github.retrooper.packetevents.protocol.world.states.enums.Half.TOP
-                    ||current==com.github.retrooper.packetevents.protocol.world.states.enums.Half.BOTTOM){
-                state.setHalf(clicked==com.github.retrooper.packetevents.protocol.world.BlockFace.DOWN
-                        ?com.github.retrooper.packetevents.protocol.world.states.enums.Half.TOP
-                        :com.github.retrooper.packetevents.protocol.world.states.enums.Half.BOTTOM);
-            }
+        if (block.hasProperty(StateValue.HALF)) {
+            int half = faceId == 0 ? 0x8 : 0x0;
+            block.setData((block.getData() & ~0x8) | half);
         }
-        if(state.hasProperty(com.github.retrooper.packetevents.protocol.world.states.type.StateValue.ROTATION)){
-            int rotation=Math.floorMod((int)Math.floor((player.getYaw()+180.0f)*16.0f/360.0f+0.5f),16);
-            state.setRotation(rotation);
+        if (block.hasProperty(StateValue.ROTATION)) {
+            int rotation = Math.floorMod((int) Math.floor((player.getYaw() + 180.0f) * 16.0f / 360.0f + 0.5f), 16);
+            block.setData(rotation & 0xF);
         }
-        return state;
+        return block;
     }
 
-    private static com.github.retrooper.packetevents.protocol.world.BlockFace horizontalFacing(float yaw){
-        int direction=Math.floorMod((int)Math.floor(yaw/90.0f+0.5f),4);
-        com.github.retrooper.packetevents.protocol.world.BlockFace looking;
-        switch(direction){
-            case 1:looking=com.github.retrooper.packetevents.protocol.world.BlockFace.WEST;break;
-            case 2:looking=com.github.retrooper.packetevents.protocol.world.BlockFace.NORTH;break;
-            case 3:looking=com.github.retrooper.packetevents.protocol.world.BlockFace.EAST;break;
-            default:looking=com.github.retrooper.packetevents.protocol.world.BlockFace.SOUTH;
+    /** Which way the placed block faces, mirroring vanilla: toward the player. */
+    private static net.vibmc.world.block.Facing blockFacing(float yaw) {
+        int direction = Math.floorMod((int) Math.floor(yaw / 90.0f + 0.5f), 4);
+        switch (direction) {
+            case 1: return net.vibmc.world.block.Facing.EAST;    // looking west
+            case 2: return net.vibmc.world.block.Facing.SOUTH;   // looking north
+            case 3: return net.vibmc.world.block.Facing.WEST;    // looking east
+            default: return net.vibmc.world.block.Facing.NORTH;  // looking south
         }
-        return looking.getOppositeFace();
     }
-
 }

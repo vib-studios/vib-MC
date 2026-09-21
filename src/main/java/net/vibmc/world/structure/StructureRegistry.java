@@ -1,6 +1,6 @@
 package net.vibmc.world.structure;
 
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.*;
 import net.vibmc.world.gen.TerrainGenerator;
 import java.io.IOException;
@@ -86,7 +86,7 @@ public final class StructureRegistry {
             int rx,rz;switch(normalized){case 90:rx=entry.z;rz=template.sizeX()-1-entry.x;break;case 180:rx=template.sizeX()-1-entry.x;rz=template.sizeZ()-1-entry.z;break;case 270:rx=template.sizeZ()-1-entry.z;rz=entry.x;break;default:rx=entry.x;rz=entry.z;}
             int worldX=originX+rx,worldZ=originZ+rz,worldY=(surface?Math.max(terrain.getHeight(worldX,worldZ),minimumSurface)+baseY:baseY)+entry.y;
             if(worldY<0||worldY>=256||Math.floorDiv(worldX,16)!=chunk.chunkX()||Math.floorDiv(worldZ,16)!=chunk.chunkZ())continue;
-            WrappedBlockState existing=chunk.getBlock(Math.floorMod(worldX,16),worldY,Math.floorMod(worldZ,16));
+            BlockState existing=chunk.getBlock(Math.floorMod(worldX,16),worldY,Math.floorMod(worldZ,16));
             if(Blocks.same(entry.block,Blocks.LEAVES)&&!Blocks.same(existing,Blocks.AIR))continue;
             chunk.setBlock(Math.floorMod(worldX,16),worldY,Math.floorMod(worldZ,16),entry.block);
         }

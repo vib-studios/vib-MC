@@ -33,7 +33,7 @@ class StructureGenerationTest {
         boolean found=false;
         for(int x=-2;x<=2&&!found;x++)for(int z=-2;z<=2&&!found;z++){
             WorldChunk chunk=world.getChunk(x,z);
-            for(com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block:chunk.blocks())if(Blocks.same(block,Blocks.WOOD)){found=true;break;}
+            for(net.vibmc.world.block.BlockState block:chunk.blocks())if(Blocks.same(block,Blocks.WOOD)){found=true;break;}
         }
         assertTrue(found,"default structure set should generate oak trees");
         StructureRegistry.clear();
@@ -68,7 +68,7 @@ class StructureGenerationTest {
             for (int chunkZ = Math.floorDiv(spawn[1] - 48, 16);
                  chunkZ <= Math.floorDiv(spawn[1] + 48, 16); chunkZ++) {
                 WorldChunk chunk = world.getChunk(chunkX, chunkZ);
-                for (com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block : chunk.blocks()) {
+                for (net.vibmc.world.block.BlockState block : chunk.blocks()) {
                     if (Blocks.same(block, Blocks.OAK_PLANKS)) planks++;
                     else if (Blocks.same(block, Blocks.GRAVEL)) gravel++;
                     else if (Blocks.same(block, Blocks.WATER)) water++;

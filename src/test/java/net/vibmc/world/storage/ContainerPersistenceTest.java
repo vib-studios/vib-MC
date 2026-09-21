@@ -1,9 +1,9 @@
 package net.vibmc.world.storage;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import net.vibmc.inventory.Inventory;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
 import net.vibmc.world.BlockEntities;
 import net.vibmc.world.Furnace;
 import org.junit.jupiter.api.Test;
@@ -19,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Chest and furnace contents survive a restart; chunk files hold block states only. */
 class ContainerPersistenceTest {
-    private static ItemStack stack(com.github.retrooper.packetevents.protocol.item.type.ItemType type, int amount) {
-        return ItemStack.builder().type(type).amount(amount).version(ClientVersion.V_1_12_2).build();
+    private static ItemStack stack(ItemType type, int amount) {
+        return ItemStack.builder().type(type).amount(amount).build();
     }
 
     @Test

@@ -1,13 +1,6 @@
 package net.vibmc.player.storage;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.nbt.NBT;
-import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
-import com.github.retrooper.packetevents.protocol.nbt.NBTLimiter;
-import com.github.retrooper.packetevents.protocol.nbt.serializer.DefaultNBTSerializer;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.vibmc.inventory.ItemStack;
 import net.vibmc.player.GameMode;
 
 import java.io.*;

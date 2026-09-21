@@ -1,12 +1,10 @@
 package net.vibmc.world;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
-import com.github.retrooper.packetevents.protocol.world.states.type.StateType;
-import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
+import net.vibmc.world.block.BlockState;
+import net.vibmc.world.block.BlockType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,80 +20,75 @@ public final class BlockDrops {
     /** Mining tiers, ordered. A block is only harvestable by a tool at or above its tier. */
     public enum Tier { NONE, WOOD, STONE, IRON, DIAMOND }
 
-    private static final Map<StateType, ItemType> DROPS = new HashMap<>();
-    private static final Map<StateType, int[]> DROP_AMOUNTS = new HashMap<>();
-    private static final Map<StateType, Tier> PICKAXE_TIERS = new HashMap<>();
-    private static final Map<ItemType, Tier> PICKAXE_LEVELS = new HashMap<>();
+    /** Drop mapping and rule tables keyed by semantic block name. */
+    private static final Map<String, ItemType> DROPS = new HashMap<>();
+    private static final Map<String, int[]> DROP_AMOUNTS = new HashMap<>();
+    private static final Map<String, Tier> PICKAXE_TIERS = new HashMap<>();
+    private static final Map<String, Tier> PICKAXE_LEVELS = new HashMap<>();
 
     static {
         // Blocks whose drop differs from the block itself.
-        DROPS.put(StateTypes.STONE, ItemTypes.COBBLESTONE);
-        DROPS.put(StateTypes.GRASS_BLOCK, ItemTypes.DIRT);
-        DROPS.put(StateTypes.COAL_ORE, ItemTypes.COAL);
-        DROPS.put(StateTypes.DIAMOND_ORE, ItemTypes.DIAMOND);
-        DROPS.put(StateTypes.EMERALD_ORE, ItemTypes.EMERALD);
-        DROPS.put(StateTypes.REDSTONE_ORE, ItemTypes.REDSTONE);
-        DROPS.put(StateTypes.LAPIS_ORE, ItemTypes.LAPIS_LAZULI);
-        DROPS.put(StateTypes.OAK_LEAVES, ItemTypes.AIR);
-        DROPS.put(StateTypes.FIRE, ItemTypes.AIR);
-        DROPS.put(StateTypes.NETHER_PORTAL, ItemTypes.AIR);
-        DROPS.put(StateTypes.END_PORTAL, ItemTypes.AIR);
-        DROPS.put(StateTypes.GLASS, ItemTypes.AIR);
-        DROPS.put(StateTypes.DEAD_BUSH, ItemTypes.AIR);
+        DROPS.put("stone", ItemTypes.COBBLESTONE);
+        DROPS.put("grass_block", ItemTypes.DIRT);
+        DROPS.put("coal_ore", ItemTypes.COAL);
+        DROPS.put("diamond_ore", ItemTypes.DIAMOND);
+        DROPS.put("emerald_ore", ItemTypes.EMERALD);
+        DROPS.put("redstone_ore", ItemTypes.REDSTONE);
+        DROPS.put("lapis_ore", ItemTypes.LAPIS_LAZULI);
+        DROPS.put("oak_leaves", ItemTypes.AIR);
+        DROPS.put("fire", ItemTypes.AIR);
+        DROPS.put("nether_portal", ItemTypes.AIR);
+        DROPS.put("end_portal", ItemTypes.AIR);
+        DROPS.put("glass", ItemTypes.AIR);
+        DROPS.put("dead_bush", ItemTypes.AIR);
 
         // Multi-item drops as {minimum, maximum}.
-        DROP_AMOUNTS.put(StateTypes.REDSTONE_ORE, new int[]{4, 5});
-        DROP_AMOUNTS.put(StateTypes.LAPIS_ORE, new int[]{4, 8});
+        DROP_AMOUNTS.put("redstone_ore", new int[]{4, 5});
+        DROP_AMOUNTS.put("lapis_ore", new int[]{4, 8});
 
         // Tool requirements. Anything absent drops without a tool.
-        PICKAXE_TIERS.put(StateTypes.STONE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.COBBLESTONE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.ANDESITE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.DIORITE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.COAL_ORE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.FURNACE, Tier.WOOD);
-        PICKAXE_TIERS.put(StateTypes.IRON_ORE, Tier.STONE);
-        PICKAXE_TIERS.put(StateTypes.LAPIS_ORE, Tier.STONE);
-        PICKAXE_TIERS.put(StateTypes.GOLD_ORE, Tier.IRON);
-        PICKAXE_TIERS.put(StateTypes.DIAMOND_ORE, Tier.IRON);
-        PICKAXE_TIERS.put(StateTypes.EMERALD_ORE, Tier.IRON);
-        PICKAXE_TIERS.put(StateTypes.REDSTONE_ORE, Tier.IRON);
-        PICKAXE_TIERS.put(StateTypes.OBSIDIAN, Tier.DIAMOND);
+        PICKAXE_TIERS.put("stone", Tier.WOOD);
+        PICKAXE_TIERS.put("cobblestone", Tier.WOOD);
+        PICKAXE_TIERS.put("andesite", Tier.WOOD);
+        PICKAXE_TIERS.put("diorite", Tier.WOOD);
+        PICKAXE_TIERS.put("coal_ore", Tier.WOOD);
+        PICKAXE_TIERS.put("furnace", Tier.WOOD);
+        PICKAXE_TIERS.put("iron_ore", Tier.STONE);
+        PICKAXE_TIERS.put("lapis_ore", Tier.STONE);
+        PICKAXE_TIERS.put("gold_ore", Tier.IRON);
+        PICKAXE_TIERS.put("diamond_ore", Tier.IRON);
+        PICKAXE_TIERS.put("emerald_ore", Tier.IRON);
+        PICKAXE_TIERS.put("redstone_ore", Tier.IRON);
+        PICKAXE_TIERS.put("obsidian", Tier.DIAMOND);
 
-        PICKAXE_LEVELS.put(ItemTypes.WOODEN_PICKAXE, Tier.WOOD);
-        PICKAXE_LEVELS.put(ItemTypes.GOLDEN_PICKAXE, Tier.WOOD);
-        PICKAXE_LEVELS.put(ItemTypes.STONE_PICKAXE, Tier.STONE);
-        PICKAXE_LEVELS.put(ItemTypes.IRON_PICKAXE, Tier.IRON);
-        PICKAXE_LEVELS.put(ItemTypes.DIAMOND_PICKAXE, Tier.DIAMOND);
+        PICKAXE_LEVELS.put("wooden_pickaxe", Tier.WOOD);
+        PICKAXE_LEVELS.put("golden_pickaxe", Tier.WOOD);
+        PICKAXE_LEVELS.put("stone_pickaxe", Tier.STONE);
+        PICKAXE_LEVELS.put("iron_pickaxe", Tier.IRON);
+        PICKAXE_LEVELS.put("diamond_pickaxe", Tier.DIAMOND);
     }
 
     private BlockDrops() {}
 
-    /**
-     * The item a block drops as itself. Block-state names are not namespaced while item names
-     * are, so the qualified form has to be tried as well.
-     */
-    private static ItemType itemFor(StateType type) {
-        String name = type.getName().toString();
-        ItemType item = ItemTypes.getByName(name);
-        if (item == null && name.indexOf(':') < 0) item = ItemTypes.getByName("minecraft:" + name);
-        return item;
+    /** The item a block drops as itself. Item names match the block-entity names. */
+    private static ItemType itemFor(BlockType type) {
+        return type == null ? null : ItemTypes.getByName(type.name());
     }
 
     /** The tool tier required to get a drop out of this block. */
-    public static Tier requiredTier(WrappedBlockState block) {
-        Tier tier = PICKAXE_TIERS.get(block.getType());
+    public static Tier requiredTier(BlockState block) {
+        Tier tier = block == null ? null : PICKAXE_TIERS.get(block.getType().name());
         return tier == null ? Tier.NONE : tier;
     }
 
     /** The tier the held item provides. */
     public static Tier heldTier(ItemStack held) {
         if (held == null || held.isEmpty()) return Tier.NONE;
-        Tier tier = PICKAXE_LEVELS.get(held.getType());
+        Tier tier = PICKAXE_LEVELS.get(held.getType().name());
         return tier == null ? Tier.NONE : tier;
     }
 
-    public static boolean canHarvest(WrappedBlockState block, ItemStack held) {
+    public static boolean canHarvest(BlockState block, ItemStack held) {
         return heldTier(held).ordinal() >= requiredTier(block).ordinal();
     }
 
@@ -103,25 +96,23 @@ public final class BlockDrops {
      * The stack a block yields, or an empty stack when it yields nothing. {@code random} is
      * the world's generator so variable drops stay reproducible within a session.
      */
-    public static ItemStack drop(WrappedBlockState block, ItemStack held, java.util.Random random) {
+    public static ItemStack drop(BlockState block, ItemStack held, java.util.Random random) {
         if (block == null || Blocks.same(block, Blocks.AIR) || Blocks.isFluid(block)) return ItemStack.EMPTY;
         if (!canHarvest(block, held)) return ItemStack.EMPTY;
+        String name = block.getType().name();
         // Leaves are the only food source in a world with no farming or mobs, so they drop
         // apples more generously than vanilla's 0.5%.
-        if (block.getType() == StateTypes.OAK_LEAVES) {
-            return random.nextInt(20) == 0
-                    ? ItemStack.builder().type(ItemTypes.APPLE).amount(1)
-                        .version(ClientVersion.V_1_12_2).build()
-                    : ItemStack.EMPTY;
+        if (name.equals("oak_leaves")) {
+            return random.nextInt(20) == 0 ? ItemStack.of("apple") : ItemStack.EMPTY;
         }
-        ItemType type = DROPS.get(block.getType());
+        ItemType type = DROPS.get(name);
         if (type == null) type = itemFor(block.getType());
         if (type == null || type == ItemTypes.AIR) return ItemStack.EMPTY;
         int amount = 1;
-        int[] range = DROP_AMOUNTS.get(block.getType());
+        int[] range = DROP_AMOUNTS.get(name);
         if (range != null) amount = range[0] + random.nextInt(range[1] - range[0] + 1);
         // Gravel occasionally yields flint instead of itself, as in vanilla.
         if (Blocks.same(block, Blocks.GRAVEL) && random.nextInt(10) == 0) type = ItemTypes.FLINT;
-        return ItemStack.builder().type(type).amount(amount).version(ClientVersion.V_1_12_2).build();
+        return ItemStack.of(type.name(), amount);
     }
 }

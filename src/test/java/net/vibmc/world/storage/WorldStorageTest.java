@@ -1,7 +1,7 @@
 package net.vibmc.world.storage;
 
 import org.junit.jupiter.api.Test;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.Blocks;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,13 +48,13 @@ class WorldStorageTest {
     @Test
     void chunkBlocksSurviveARoundTrip(@TempDir Path dir) throws IOException {
         WorldStorage storage = storageIn(dir);
-        WrappedBlockState[] blocks = new WrappedBlockState[BLOCKS_PER_CHUNK];
+        BlockState[] blocks = new BlockState[BLOCKS_PER_CHUNK];
         for (int i = 0; i < blocks.length; i++) {
-            blocks[i] = new com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[]{Blocks.AIR,Blocks.STONE,Blocks.GRASS,Blocks.DIRT,Blocks.WOOD,Blocks.LEAVES,Blocks.WATER,Blocks.LAVA,Blocks.CHEST,Blocks.FURNACE,Blocks.CRAFTING_TABLE,Blocks.DOOR,Blocks.TRAPDOOR,Blocks.SAND,Blocks.GRAVEL,Blocks.BEDROCK,Blocks.ANDESITE,Blocks.DIORITE}[i % 18];
+            blocks[i] = new net.vibmc.world.block.BlockState[]{Blocks.AIR,Blocks.STONE,Blocks.GRASS,Blocks.DIRT,Blocks.WOOD,Blocks.LEAVES,Blocks.WATER,Blocks.LAVA,Blocks.CHEST,Blocks.FURNACE,Blocks.CRAFTING_TABLE,Blocks.DOOR,Blocks.TRAPDOOR,Blocks.SAND,Blocks.GRAVEL,Blocks.BEDROCK,Blocks.ANDESITE,Blocks.DIORITE}[i % 18];
         }
 
         storage.writeChunk(3, -2, blocks);
-        WrappedBlockState[] read = new WorldStorage(dir.resolve("world").toString()).readChunk(3, -2);
+        BlockState[] read = new WorldStorage(dir.resolve("world").toString()).readChunk(3, -2);
 
         assertArrayEquals(blocks, read);
     }
@@ -62,7 +62,7 @@ class WorldStorageTest {
     @Test
     void negativeChunkCoordinatesRoundTrip(@TempDir Path dir) throws IOException {
         WorldStorage storage = storageIn(dir);
-        WrappedBlockState[] blocks = new WrappedBlockState[BLOCKS_PER_CHUNK];
+        BlockState[] blocks = new BlockState[BLOCKS_PER_CHUNK];
         java.util.Arrays.fill(blocks,Blocks.AIR);
         blocks[0] = Blocks.BEDROCK;
 
@@ -119,5 +119,5 @@ class WorldStorageTest {
 
         assertThrows(IOException.class, () -> storage.writeChunk(0, 0, emptyStates(10)));
     }
-    private static WrappedBlockState[] emptyStates(int size){WrappedBlockState[] states=new WrappedBlockState[size];java.util.Arrays.fill(states,Blocks.AIR);return states;}
+    private static BlockState[] emptyStates(int size){BlockState[] states=new BlockState[size];java.util.Arrays.fill(states,Blocks.AIR);return states;}
 }

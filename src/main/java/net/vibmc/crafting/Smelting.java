@@ -1,9 +1,8 @@
 package net.vibmc.crafting;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +38,7 @@ public final class Smelting {
         if (input == null || input.isEmpty()) return ItemStack.EMPTY;
         ItemType result = RESULTS.get(input.getType());
         return result == null ? ItemStack.EMPTY
-                : ItemStack.builder().type(result).amount(1).version(ClientVersion.V_1_12_2).build();
+                : ItemStack.builder().type(result).amount(1).build();
     }
 
     /** How many ticks one of this item burns for; 0 when it is not fuel. */

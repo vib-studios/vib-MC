@@ -1,7 +1,7 @@
 package net.vibmc.world;
 
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
-import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
+import net.vibmc.world.block.BlockState;
+import net.vibmc.world.block.BlockType;
 
 import java.util.Queue;
 import java.util.Set;
@@ -83,18 +83,18 @@ public final class BlockUpdates {
     }
 
     private void apply(int x, int y, int z) {
-        WrappedBlockState state = world.getBlockAt(x, y, z);
+        BlockState state = world.getBlockAt(x, y, z);
         if (Blocks.same(state, Blocks.AIR)) return;
         if (Blocks.isGravityAffected(state)) { applyGravity(state, x, y, z); return; }
         if (Blocks.isFluid(state)) { applyFluid(state, x, y, z); return; }
-        if (state.getType() == StateTypes.OAK_LEAVES) { applyLeafDecay(x, y, z); return; }
+        if (Blocks.isType(state, BlockType.of("oak_leaves"))) { applyLeafDecay(x, y, z); return; }
         if (needsSupport(state) && !isSupported(state, x, y, z)) breakNaturally(state, x, y, z);
     }
 
     /** Sand and gravel drop until they land on something. */
-    private void applyGravity(WrappedBlockState state, int x, int y, int z) {
+    private void applyGravity(BlockState state, int x, int y, int z) {
         if (y <= 0) return;
-        WrappedBlockState below = world.getBlockAt(x, y - 1, z);
+        BlockState below = world.getBlockAt(x, y - 1, z);
         if (!Blocks.isReplaceable(below)) return;
         world.setBlockAndUpdate(x, y, z, Blocks.AIR);
         world.setBlockAndUpdate(x, y - 1, z, state);
@@ -104,7 +104,7 @@ public final class BlockUpdates {
      * Fluid spread. A block flows down when it can, sideways when it cannot, and drains when
      * nothing upstream is feeding it. Source blocks (level 0) never drain.
      */
-    private void applyFluid(WrappedBlockState fluid, int x, int y, int z) {
+    private void applyFluid(BlockState fluid, int x, int y, int z) {
         boolean water = Blocks.isWater(fluid);
         int maxSpread = water ? WATER_MAX_SPREAD : LAVA_MAX_SPREAD;
         int delay = water ? 5 : 15;
@@ -116,7 +116,7 @@ public final class BlockUpdates {
             world.setBlockAndUpdate(x, y, z, Blocks.AIR);
             return;
         }
-        WrappedBlockState below = y > 0 ? world.getBlockAt(x, y - 1, z) : Blocks.AIR;
+        BlockState below = y > 0 ? world.getBlockAt(x, y - 1, z) : Blocks.AIR;
         if (y > 0 && Blocks.isReplaceable(below) && !sameFluid(fluid, below)) {
             world.setBlockAndUpdate(x, y - 1, z, Blocks.fluidAt(fluid, FALLING));
             schedule(x, y - 1, z, delay);
@@ -130,7 +130,7 @@ public final class BlockUpdates {
         if (effective >= maxSpread) return;
         for (int[] offset : HORIZONTAL) {
             int nx = x + offset[0], nz = z + offset[1];
-            WrappedBlockState neighbour = world.getBlockAt(nx, y, nz);
+            BlockState neighbour = world.getBlockAt(nx, y, nz);
             if (sameFluid(fluid, neighbour)) {
                 if (Blocks.fluidLevel(neighbour) > effective + 1) {
                     world.setBlockAndUpdate(nx, y, nz, Blocks.fluidAt(fluid, effective + 1));
@@ -149,11 +149,11 @@ public final class BlockUpdates {
     }
 
     /** A flowing block survives while fed from above or by a shallower neighbour. */
-    private boolean isFed(WrappedBlockState fluid, int level, int x, int y, int z) {
+    private boolean isFed(BlockState fluid, int level, int x, int y, int z) {
         if (y < 255 && sameFluid(fluid, world.getBlockAt(x, y + 1, z))) return true;
         int effective = level >= FALLING ? 0 : level;
         for (int[] offset : HORIZONTAL) {
-            WrappedBlockState neighbour = world.getBlockAt(x + offset[0], y, z + offset[1]);
+            BlockState neighbour = world.getBlockAt(x + offset[0], y, z + offset[1]);
             if (!sameFluid(fluid, neighbour)) continue;
             int neighbourLevel = Blocks.fluidLevel(neighbour);
             if (neighbourLevel < FALLING && neighbourLevel < effective) return true;
@@ -161,7 +161,7 @@ public final class BlockUpdates {
         return false;
     }
 
-    private static boolean sameFluid(WrappedBlockState fluid, WrappedBlockState other) {
+    private static boolean sameFluid(BlockState fluid, BlockState other) {
         return other != null && other.getType() == fluid.getType();
     }
 
@@ -177,15 +177,15 @@ public final class BlockUpdates {
         breakNaturally(Blocks.LEAVES, x, y, z);
     }
 
-    private static boolean needsSupport(WrappedBlockState state) {
+    private static boolean needsSupport(BlockState state) {
         return Blocks.same(state, Blocks.CACTUS) || Blocks.same(state, Blocks.DEAD_BUSH)
-                || state.getType() == StateTypes.OAK_SAPLING;
+                || Blocks.isType(state, BlockType.of("oak_sapling"));
     }
 
     /** Cacti additionally refuse to stand against a solid neighbour, as in vanilla. */
-    private boolean isSupported(WrappedBlockState state, int x, int y, int z) {
+    private boolean isSupported(BlockState state, int x, int y, int z) {
         if (y <= 0) return false;
-        WrappedBlockState below = world.getBlockAt(x, y - 1, z);
+        BlockState below = world.getBlockAt(x, y - 1, z);
         if (Blocks.same(state, Blocks.CACTUS)) {
             if (!Blocks.same(below, Blocks.SAND) && !Blocks.same(below, Blocks.CACTUS)) return false;
             for (int[] offset : HORIZONTAL) {
@@ -196,7 +196,7 @@ public final class BlockUpdates {
         return Blocks.isSolid(below);
     }
 
-    private void breakNaturally(WrappedBlockState state, int x, int y, int z) {
+    private void breakNaturally(BlockState state, int x, int y, int z) {
         world.setBlockAndUpdate(x, y, z, Blocks.AIR);
         Effects.blockBreak(world, x, y, z, state);
     }

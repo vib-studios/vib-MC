@@ -1,8 +1,7 @@
 package net.vibmc.crafting;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,7 +63,7 @@ public final class Recipe {
     }
 
     public ItemStack result() {
-        return ItemStack.builder().type(result).amount(resultAmount).version(ClientVersion.V_1_12_2).build();
+        return ItemStack.builder().type(result).amount(resultAmount).build();
     }
 
     /** Whether this recipe is satisfied by a square grid of the given dimension. */

@@ -35,7 +35,7 @@ class ChunkPersistenceTest {
     void placedBlocksSurviveAReload(@TempDir Path dir) {
         World first = worldIn(dir);
         WorldChunk chunk = first.getChunk(3, -2);
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState generated = chunk.getBlock(9, 0, 9);
+        net.vibmc.world.block.BlockState generated = chunk.getBlock(9, 0, 9);
         chunk.setBlock(5, 40, 7, Blocks.CHEST);
         first.chunkManager().saveAll();
 
@@ -79,7 +79,7 @@ class ChunkPersistenceTest {
         world.chunkManager().saveAll();
         assertFalse(chunk.isDirty());
 
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState existing = chunk.getBlock(4, 0, 4);
+        net.vibmc.world.block.BlockState existing = chunk.getBlock(4, 0, 4);
         chunk.setBlock(4, 0, 4, existing);
         assertFalse(chunk.isDirty(), "rewriting the same block is not a change");
 

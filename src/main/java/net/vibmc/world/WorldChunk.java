@@ -1,7 +1,7 @@
 package net.vibmc.world;
 
 import net.vibmc.world.gen.TerrainGenerator;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import java.util.Arrays;
 import net.vibmc.world.structure.StructureRegistry;
 
@@ -12,7 +12,7 @@ public class WorldChunk {
     private final World world;
     private final int chunkX;
     private final int chunkZ;
-    private final WrappedBlockState[] blocks = new WrappedBlockState[16 * 16 * WORLD_HEIGHT];
+    private final BlockState[] blocks = new BlockState[16 * 16 * WORLD_HEIGHT];
 
     /** Set whenever blocks change, cleared once the chunk has been written to disk. */
     private volatile boolean dirty;
@@ -25,7 +25,7 @@ public class WorldChunk {
     }
 
     /** Rebuilds a chunk from previously saved block data instead of regenerating it. */
-    public static WorldChunk fromStored(World world, int chunkX, int chunkZ, WrappedBlockState[] stored) {
+    public static WorldChunk fromStored(World world, int chunkX, int chunkZ, BlockState[] stored) {
         WorldChunk chunk = new WorldChunk(world, chunkX, chunkZ);
         System.arraycopy(stored,0,chunk.blocks,0,chunk.blocks.length);
         chunk.dirty = false;
@@ -111,7 +111,7 @@ public class WorldChunk {
                             worldZ * 0.035 - y * 0.017, 3);
                     boolean solid = y < 32 || y > 105 || cavern > -0.12;
                     if (solid) {
-                        WrappedBlockState block = y < 35 && terrain.hash(worldX + y, worldZ) % 18 == 0
+                        BlockState block = y < 35 && terrain.hash(worldX + y, worldZ) % 18 == 0
                                 ? Blocks.SOUL_SAND : Blocks.NETHERRACK;
                         chunk.setBlock(x, y, z, block);
                     } else if (y < 31) {
@@ -158,12 +158,12 @@ public class WorldChunk {
     private static double smooth(double value){return value*value*(3.0-2.0*value);}
     private static double lerp(double a,double b,double amount){return a+(b-a)*amount;}
 
-    private static WrappedBlockState oreOrStone(TerrainGenerator terrain, int x, int y, int z) {
-        WrappedBlockState ore = net.vibmc.world.gen.OreGenerator.oreAt(terrain, x, y, z);
+    private static BlockState oreOrStone(TerrainGenerator terrain, int x, int y, int z) {
+        BlockState ore = net.vibmc.world.gen.OreGenerator.oreAt(terrain, x, y, z);
         return ore != null ? ore : stoneMix(terrain, x, y, z);
     }
 
-    private static WrappedBlockState stoneMix(TerrainGenerator terrain, int x, int y, int z) {
+    private static BlockState stoneMix(TerrainGenerator terrain, int x, int y, int z) {
         int h = terrain.hash(x, z ^ (y * 7919));
         switch (h % 16) {
             case 0:
@@ -179,7 +179,7 @@ public class WorldChunk {
         return Math.max(min, Math.min(max, value));
     }
 
-    public void setBlock(int x,int y,int z,WrappedBlockState state){if(inBounds(x,y,z)){int index=index(x,y,z);if(!Blocks.same(blocks[index],state)){blocks[index]=state;dirty=true;}}}
+    public void setBlock(int x,int y,int z,BlockState state){if(inBounds(x,y,z)){int index=index(x,y,z);if(!Blocks.same(blocks[index],state)){blocks[index]=state;dirty=true;}}}
 
     /** True when this chunk holds changes that are not on disk yet. */
     public boolean isDirty() {
@@ -196,8 +196,8 @@ public class WorldChunk {
         dirty = false;
     }
 
-    public WrappedBlockState getBlock(int x,int y,int z){if(!inBounds(x,y,z))return Blocks.AIR;return blocks[index(x,y,z)];}
-    public WrappedBlockState[] blocks(){return blocks.clone();}
+    public BlockState getBlock(int x,int y,int z){if(!inBounds(x,y,z))return Blocks.AIR;return blocks[index(x,y,z)];}
+    public BlockState[] blocks(){return blocks.clone();}
 
     public World world() { return world; }
 

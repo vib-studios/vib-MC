@@ -1,5 +1,7 @@
 package net.vibmc.world.storage;
 
+import net.vibmc.world.block.BlockState;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -157,7 +159,7 @@ public class WorldStorage {
             int chestCount = readCount(input, MAX_CONTAINERS, "container");
             for (int index = 0; index < chestCount; index++) {
                 long position = input.readLong();
-                com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                net.vibmc.inventory.ItemStack[] slots = readSlots(input);
                 net.vibmc.inventory.Inventory chest = entities.container(
                         net.vibmc.world.BlockEntities.unpackX(position),
                         net.vibmc.world.BlockEntities.unpackY(position),
@@ -170,7 +172,7 @@ public class WorldStorage {
             int furnaceCount = readCount(input, MAX_CONTAINERS, "furnace");
             for (int index = 0; index < furnaceCount; index++) {
                 long position = input.readLong();
-                com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                net.vibmc.inventory.ItemStack[] slots = readSlots(input);
                 net.vibmc.world.Furnace furnace = entities.furnace(
                         net.vibmc.world.BlockEntities.unpackX(position),
                         net.vibmc.world.BlockEntities.unpackY(position),
@@ -184,18 +186,18 @@ public class WorldStorage {
     }
 
     private static void writeSlots(DataOutputStream output,
-                                   com.github.retrooper.packetevents.protocol.item.ItemStack[] slots) throws IOException {
+                                   net.vibmc.inventory.ItemStack[] slots) throws IOException {
         output.writeInt(slots.length);
-        for (com.github.retrooper.packetevents.protocol.item.ItemStack item : slots) {
+        for (net.vibmc.inventory.ItemStack item : slots) {
             net.vibmc.inventory.ItemCodec.writeItem(output, item);
         }
     }
 
-    private static com.github.retrooper.packetevents.protocol.item.ItemStack[] readSlots(
+    private static net.vibmc.inventory.ItemStack[] readSlots(
             DataInputStream input) throws IOException {
         int size = readCount(input, MAX_CONTAINER_SLOTS, "container slot");
-        com.github.retrooper.packetevents.protocol.item.ItemStack[] slots =
-                new com.github.retrooper.packetevents.protocol.item.ItemStack[size];
+        net.vibmc.inventory.ItemStack[] slots =
+                new net.vibmc.inventory.ItemStack[size];
         for (int slot = 0; slot < size; slot++) slots[slot] = net.vibmc.inventory.ItemCodec.readItem(input);
         return slots;
     }
@@ -223,7 +225,7 @@ public class WorldStorage {
      * never been saved. A corrupt or truncated file is reported as an IOException so
      * the caller can fall back to generating fresh terrain.
      */
-    public com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] readChunk(int chunkX, int chunkZ) throws IOException {
+    public net.vibmc.world.block.BlockState[] readChunk(int chunkX, int chunkZ) throws IOException {
         Path path = chunkPath(chunkX, chunkZ);
         if (!Files.isRegularFile(path)) {
             return null;
@@ -248,13 +250,13 @@ public class WorldStorage {
                 throw new IOException("chunk claims to be " + storedX + "," + storedZ
                         + " but was stored as " + chunkX + "," + chunkZ);
             }
-            com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] blocks = new com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[BLOCKS_PER_CHUNK];
-            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) blocks[i] = com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState.getByGlobalId(in.readInt());
+            net.vibmc.world.block.BlockState[] blocks = new net.vibmc.world.block.BlockState[BLOCKS_PER_CHUNK];
+            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) blocks[i] = BlockState.fromCombined(in.readInt());
             return blocks;
         }
     }
 
-    public void writeChunk(int chunkX, int chunkZ, com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] blocks) throws IOException {
+    public void writeChunk(int chunkX, int chunkZ, net.vibmc.world.block.BlockState[] blocks) throws IOException {
         if (blocks.length != BLOCKS_PER_CHUNK) {
             throw new IOException("expected " + BLOCKS_PER_CHUNK + " blocks, got " + blocks.length);
         }

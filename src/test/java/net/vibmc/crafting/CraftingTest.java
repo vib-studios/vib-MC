@@ -1,8 +1,8 @@
 package net.vibmc.crafting;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CraftingTest {
-    private static ItemStack stack(com.github.retrooper.packetevents.protocol.item.type.ItemType type, int amount) {
-        return ItemStack.builder().type(type).amount(amount).version(ClientVersion.V_1_12_2).build();
+    private static ItemStack stack(ItemType type, int amount) {
+        return ItemStack.builder().type(type).amount(amount).build();
     }
 
     @Test

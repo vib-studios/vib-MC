@@ -1,6 +1,5 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import net.vibmc.crafting.CraftingGrid;
 
 /**

@@ -1,7 +1,7 @@
 package net.vibmc.world;
 
 import net.vibmc.entity.Entity;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.storage.WorldStorage;
 
 import java.util.ArrayList;
@@ -76,13 +76,13 @@ public class World {
         return Collections.unmodifiableList(entities);
     }
 
-    public WrappedBlockState getBlockAt(int x, int y, int z) {
+    public BlockState getBlockAt(int x, int y, int z) {
         if (y < 0 || y >= 256) return Blocks.AIR;
         return chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16))
                 .getBlock(Math.floorMod(x, 16), y, Math.floorMod(z, 16));
     }
 
-    public boolean setBlockAt(int x, int y, int z, WrappedBlockState block) {
+    public boolean setBlockAt(int x, int y, int z, BlockState block) {
         if (y < 0 || y >= 256) return false;
         WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
         int localX = Math.floorMod(x, 16);
@@ -98,7 +98,7 @@ public class World {
      * {@link #setBlockAt}; world generation deliberately does not, so a generated ocean does
      * not start flowing the moment it loads.
      */
-    public boolean setBlockAndUpdate(int x, int y, int z, WrappedBlockState block) {
+    public boolean setBlockAndUpdate(int x, int y, int z, BlockState block) {
         if (!setBlockAt(x, y, z, block)) return false;
         net.vibmc.server.VibMC server = net.vibmc.server.VibMC.getInstance();
         if (server != null) server.getPlayerManager().broadcastBlockChange(this, x, y, z, block);
@@ -131,7 +131,7 @@ public class World {
         WorldChunk chunk = chunkManager.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
         int localX = Math.floorMod(x, 16), localZ = Math.floorMod(z, 16);
         for (int y = 255; y >= 0; y--) {
-            WrappedBlockState id = chunk.getBlock(localX, y, localZ);
+            BlockState id = chunk.getBlock(localX, y, localZ);
             if (!Blocks.same(id, Blocks.AIR) && !Blocks.same(id, Blocks.WATER) && !Blocks.same(id, Blocks.LAVA)
                     && !Blocks.same(id, Blocks.WOOD) && !Blocks.same(id, Blocks.LEAVES)) return y;
         }
@@ -143,7 +143,7 @@ public class World {
         int localX = Math.floorMod(x, 16);
         int localZ = Math.floorMod(z, 16);
         for (int y = 255; y >= 0; y--) {
-            WrappedBlockState id = chunk.getBlock(localX, y, localZ);
+            BlockState id = chunk.getBlock(localX, y, localZ);
             if (!Blocks.same(id, Blocks.AIR) && !Blocks.same(id, Blocks.WATER) && !Blocks.same(id, Blocks.LAVA)) {
                 return y;
             }
@@ -257,7 +257,7 @@ public class World {
         int localX = Math.floorMod(x, 16);
         int localZ = Math.floorMod(z, 16);
         for (int y = 100; y >= 2; y--) {
-            WrappedBlockState floor = chunk.getBlock(localX, y, localZ);
+            BlockState floor = chunk.getBlock(localX, y, localZ);
             if (!Blocks.same(floor, Blocks.AIR) && !Blocks.same(floor, Blocks.LAVA)
                     && Blocks.same(chunk.getBlock(localX, y + 1, localZ), Blocks.AIR)
                     && Blocks.same(chunk.getBlock(localX, y + 2, localZ), Blocks.AIR)) {

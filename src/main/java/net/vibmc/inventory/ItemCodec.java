@@ -1,13 +1,9 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.nbt.NBT;
-import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
-import com.github.retrooper.packetevents.protocol.nbt.NBTLimiter;
-import com.github.retrooper.packetevents.protocol.nbt.serializer.DefaultNBTSerializer;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.kyori.adventure.nbt.BinaryTag;
+import net.kyori.adventure.nbt.BinaryTagIO;
+import net.kyori.adventure.nbt.CompoundBinaryTag;
+import net.vibmc.mappings.Mappings;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -20,7 +16,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * The on-disk encoding for one item stack, shared by player data and world containers so the
- * two cannot drift apart. Item payloads use PacketEvents' complete NBT codec.
+ * two cannot drift apart. Item NBT uses adventure-nbt, the same codec the network layer uses.
  */
 public final class ItemCodec {
     private static final int MAX_ITEM_NBT_BYTES = 1 << 20;
@@ -34,15 +30,16 @@ public final class ItemCodec {
             return;
         }
         output.writeBoolean(true);
-        writeBoundedString(output, item.getType().getName().toString(), "item type");
+        writeBoundedString(output, item.getType().name(), "item type");
         output.writeInt(item.getAmount());
         output.writeInt(item.getDamageValue());
-        NBTCompound tag = item.getNBT();
-        output.writeBoolean(tag != null);
-        if (tag == null) return;
+        CompoundBinaryTag tag = item.getNBT();
+        boolean hasTag = tag != null && !tag.isEmpty();
+        output.writeBoolean(hasTag);
+        if (!hasTag) return;
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream nbtOutput = new DataOutputStream(bytes)) {
-            DefaultNBTSerializer.INSTANCE.serializeTag(nbtOutput, tag, true);
+            BinaryTagIO.writer().writeNameless(tag, (DataOutput) nbtOutput);
         }
         byte[] payload = bytes.toByteArray();
         if (payload.length > MAX_ITEM_NBT_BYTES) throw new IOException("item NBT exceeds size limit");
@@ -53,27 +50,25 @@ public final class ItemCodec {
     public static ItemStack readItem(DataInput input) throws IOException {
         if (!input.readBoolean()) return ItemStack.EMPTY;
         String typeName = readBoundedString(input, "item type");
-        ItemType type = ItemTypes.getByName(typeName);
-        if (type == null || type == ItemTypes.AIR) throw new IOException("unknown item type " + typeName);
+        if (typeName.equals("air") || !Mappings.hasItem(typeName)) {
+            throw new IOException("unknown item type " + typeName);
+        }
         int amount = input.readInt();
         int damage = input.readInt();
         if (amount <= 0 || amount > 127) throw new IOException("invalid item amount " + amount);
-        NBTCompound tag = null;
+        CompoundBinaryTag tag = CompoundBinaryTag.empty();
         if (input.readBoolean()) {
             int length = input.readInt();
             if (length < 0 || length > MAX_ITEM_NBT_BYTES) throw new IOException("invalid item NBT length " + length);
             byte[] payload = new byte[length];
             input.readFully(payload);
             try (DataInputStream nbtInput = new DataInputStream(new ByteArrayInputStream(payload))) {
-                NBT encoded = DefaultNBTSerializer.INSTANCE.deserializeTag(NBTLimiter.noop(), nbtInput, true);
-                if (!(encoded instanceof NBTCompound)) throw new IOException("item tag is not a compound");
-                tag = (NBTCompound) encoded;
+                BinaryTag encoded = BinaryTagIO.reader().readNameless((DataInput) nbtInput);
+                if (!(encoded instanceof CompoundBinaryTag)) throw new IOException("item tag is not a compound");
+                tag = (CompoundBinaryTag) encoded;
             }
         }
-        ItemStack item = ItemStack.builder().type(type).amount(amount).nbt(tag)
-                .version(ClientVersion.V_1_12_2).build();
-        item.setDamageValue(damage);
-        return item;
+        return new ItemStack(ItemType.of(typeName), amount, damage, tag);
     }
 
     public static String readBoundedString(DataInput input, String label) throws IOException {

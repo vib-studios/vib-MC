@@ -1,9 +1,9 @@
 package net.vibmc.world;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import net.vibmc.crafting.Smelting;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.inventory.Inventory;
+import net.vibmc.inventory.ItemStack;
 import net.vibmc.server.VibMC;
 
 /**

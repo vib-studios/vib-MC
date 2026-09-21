@@ -5,19 +5,19 @@
 [![Work in Progress](https://img.shields.io/badge/status-WIP-red?style=for-the-badge)]()
 [![AI Generated](https://img.shields.io/badge/AI-Generated-9cf?style=for-the-badge)]()
 [![Vibecoded](https://img.shields.io/badge/Vibecoded-ff69b4?style=for-the-badge)]()
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.8--26.1.2-blue?style=for-the-badge&logo=minecraft)]()
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.12.2-blue?style=for-the-badge&logo=minecraft)]()
 [![License: GPL--3.0](https://img.shields.io/badge/License-GPL--3.0-yellow?style=for-the-badge)](LICENSE)
 [![Release](https://img.shields.io/badge/Release-v0.0.7-blue?style=for-the-badge)](https://github.com/vib-studios/vib-MC/releases/tag/v0.0.7)
 
 **vibed into existence** — a Minecraft server made entirely by AI, one prompt at a time.
 
-**Minecraft 1.8 → 26.1.2** — excluding 1.16, 1.16.1 and 1.19.3
+**Minecraft 1.12.2** — protocol 340
 
 </div>
 
 ---
 
-`vib-MC` is a Minecraft Java Edition server implementation built from scratch through AI-assisted/vibecoded development — no vanilla code, no Bukkit fork, just prompts, one at a time. It started as an experiment in "can this even connect", and it is now a real, playable server: clients from **Minecraft 1.8 through 26.1.2** (excluding 1.16, 1.16.1 and 1.19.3) can join the same server, walk around persistent procedurally generated worlds, and — as of v0.0.7 — actually play survival.
+`vib-MC` is a Minecraft Java Edition server implementation built from scratch through AI-assisted/vibecoded development — no vanilla code, no Bukkit fork, just prompts, one at a time. It started as an experiment in "can this even connect", and it is now a real, playable server: **Minecraft 1.12.2** clients can join, walk around persistent procedurally generated worlds, and — as of v0.0.7 — actually play survival.
 
 The project focuses on experimenting with Minecraft server internals, custom world generation, persistence, multiplayer, plugins, and making the server easy to extend.
 
@@ -29,11 +29,9 @@ vib-MC is a hobby/experimental project and is not intended to replace mature ser
 
 No mobs yet, and no item entities — drops go straight into your inventory. vib-MC is not a Vanilla or Paper replacement, and not every Minecraft mechanic is implemented, but the survival loop is real.
 
-### Multi-version support
+### Protocol compatibility
 
-vib-MC accepts Minecraft Java Edition clients from **1.8 through 26.1.2**, over PacketEvents-based multi-version networking on top of Netty.
-
-Explicitly **not** supported: **1.16**, **1.16.1** and **1.19.3** — those three are rejected at handshake (see [Protocol version model](#protocol-version-model) for why).
+vib-MC serves the **vanilla Minecraft 1.12.2 protocol (340)** only. The 1.12.2 packet IDs, brand channel, and slot/section formats are the single wire model, and every other handshake protocol version is rejected with "This server supports only Minecraft 1.12.2."
 
 ## Previous Release — v0.0.6
 
@@ -100,7 +98,7 @@ For an existing world, the seed stored in `level.dat` takes priority over the co
 | Status | Feature |
 |:------:|---------|
 | ✅ | Server startup |
-| ✅ | Minecraft 1.8 – 26.1.2 client connections (except 1.16, 1.16.1, 1.19.3) |
+| ✅ | Minecraft 1.12.2 (protocol 340) client connections |
 | ✅ | Custom world generation |
 | ✅ | Chunk generation and streaming |
 | ✅ | Players appear in each other's tab list and world |
@@ -171,19 +169,19 @@ Player digging and placement now update authoritative chunks, broadcast block-ch
 
 ## Protocol organization
 
-Protocol 340 packet IDs, version metadata, brand channel, and wire constants are centralized in `Protocol340`, reducing version-specific literals in handlers and providing a clear seam for future protocol adapters. The server sends `MC|Brand` with `vib-MC` after login and includes per-column biome bytes in full chunk packets.
+Protocol 340 packet IDs, version metadata, brand channel, and wire constants are centralized in `Protocol340`. The server sends `MC|Brand` with `vib-MC` after login and includes per-column biome bytes in full chunk packets. Outbound packets are either PacketEvents wrappers or small raw writers (`PacketSender`) for the handful of 1.12 payloads without a clean wrapper (sound effects, window items, entity equipment).
 
 ## Protocol version model
 
-vib-MC uses Minecraft 1.12.2 semantics and registries while PacketEvents owns handshake version detection and connection-state transitions. Because this custom endpoint accepts multiple wire versions directly, PacketEvents prepares each wrapper against the target `User#getClientVersion()` so packet IDs and version-dependent wrapper layouts match that connection. PacketEvents currently exposes this behavior behind its `ChannelInjector#isProxy()` capability even though vib-MC is not a forwarding proxy; no ViaVersion translation layer is installed. This does not invent semantic translations for concepts vib-MC has not implemented, but supported wrappers are encoded with the target protocol's IDs and layouts. Minecraft 1.16 and 1.16.1 are explicitly rejected because PacketEvents 2.13 reports incorrect clientbound packet IDs for those two releases. Minecraft 1.19.3 is also rejected because PE reads a profile-key field that the release no longer sends. Verified compatibility currently stops at exactly Minecraft 26.1.2.
+vib-MC implements exactly one wire protocol: **vanilla 1.12.2, protocol 340**. `HandshakeHandler.isSupportedProtocol` accepts only 340, and a matching `ClientVersion.V_1_12_2` is required. All in-game wire data (block combined IDs `id<<4|data`, item IDs, slot NBT, biome bytes, chunk sections) targets 1.12.2. PacketEvents owns raw packet framing, connection-state transitions, and wrapper serialization against the 1.12.2 client version; no ViaVersion translation layer is installed.
 
-## PacketEvents-backed world data
+## Block and item data model
 
-World chunks store PacketEvents `WrappedBlockState` objects directly, and inventories use PacketEvents `ItemStack`/`ItemType` directly. Structure palettes, terrain generation, block interaction, creative inventory updates, durability, `/give`, persistence, and chunk packets all share those semantic objects instead of parallel vib-MC block/item IDs.
+Block and item state uses vib-MC's own semantic types instead of PacketEvents model objects. `net.vibmc.world.block.BlockState` stores a semantic block name plus the 1.12 data nibble; its global ID *is* the 1.12 combined ID (`minecraftId << 4 | data`), so chunk encoding, palettes, world persistence, and block interactions all share the same value. Inventories use `net.vibmc.inventory.ItemStack`/`ItemType` with 1.12 item IDs and slot NBT. Structure palettes, terrain generation, block interaction, creative inventory updates, durability, `/give`, and persistence all use these types.
 
 A `ServerPlayer` is created immediately for every PacketEvents `User`. Its world, UUID, username, and other not-yet-known login state remain nullable until authentication completes; `isInWorld()` distinguishes active gameplay players. Packet wrappers are created at call sites and sent directly with `User.sendPacket(...)`; there is no pending-connection class, packet facade, or parallel protocol implementation.
 
-Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers. The vendored PrismarineJS minecraft-data snapshots are used only for Java-edition registry/configuration payloads such as the modern Join Game dimension codec. `tools/update-minecraft-data.sh` creates a sparse checkout containing only the required PC `version.json` and `loginPacket.json` snapshots plus their indexes, and Gradle verifies that no unrelated datasets enter the runnable JAR.
+`net.vibmc.mappings.Mappings` loads a vendored ViaVersion 1.12 mapping snapshot (`/vendored/via-mappings/mapping-1.12.json`) covering block/combined-id names, item IDs, sounds, enchantments, and tags. The PrismarineJS minecraft-data submodule remains in the repository as a developer reference but is excluded from the runnable JAR (see `build.gradle`).
 
 ## Movement policy
 
@@ -247,7 +245,7 @@ net.vibmc.entity          — entities
 net.vibmc.player          — players
 net.vibmc.inventory       — inventories, windows, and item data
 net.vibmc.crafting        — recipes and smelting
-net.vibmc.registry        — vendored Minecraft data registries
+net.vibmc.mappings        — vendored ViaVersion 1.12 mapping snapshot loader
 net.vibmc.plugin          — plugin support
 net.vibmc.command         — commands
 net.vibmc.permission      — permissions

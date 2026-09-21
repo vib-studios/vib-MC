@@ -1,7 +1,7 @@
 package net.vibmc.entity;
 
 import net.vibmc.inventory.Inventory;
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
+import net.vibmc.inventory.ItemStack;
 import com.github.retrooper.packetevents.protocol.player.User;
 import io.netty.channel.Channel;
 import net.vibmc.network.ProtocolState;
@@ -95,7 +95,7 @@ public class ServerPlayer extends Entity {
     public String getForwardedAddress(){return forwardedAddress;}public void setForwardedAddress(String value){forwardedAddress=value;}
     public void setWorldAndIdentity(World world,String username,UUID uuid){this.world=world;setUsername(username);setProfileUuid(uuid);}
     public void enableEncryption(byte[] secret){try{SecretKeySpec key=new SecretKeySpec(secret,"AES");IvParameterSpec iv=new IvParameterSpec(secret);Cipher decrypt=Cipher.getInstance("AES/CFB8/NoPadding");decrypt.init(Cipher.DECRYPT_MODE,key,iv);Cipher encrypt=Cipher.getInstance("AES/CFB8/NoPadding");encrypt.init(Cipher.ENCRYPT_MODE,key,iv);Runnable install=()->{if(channel().pipeline().get("minecraft_decrypt")==null){channel().pipeline().addFirst("minecraft_encrypt",new net.vibmc.network.packetevents.codec.MinecraftCipherEncoder(encrypt));channel().pipeline().addFirst("minecraft_decrypt",new net.vibmc.network.packetevents.codec.MinecraftCipherDecoder(decrypt));}};if(channel().eventLoop().inEventLoop())install.run();else channel().eventLoop().execute(install);}catch(Exception e){throw new IllegalStateException("Could not enable encryption",e);}}
-    public void disconnect(String reason){if(!isOpen())return;net.kyori.adventure.text.Component component=net.kyori.adventure.text.Component.text(reason);if(protocolState==ProtocolState.LOGIN)send(new com.github.retrooper.packetevents.wrapper.login.server.WrapperLoginServerDisconnect(component));else if(protocolState==ProtocolState.CONFIGURATION)send(new com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerDisconnect(component));else if(protocolState==ProtocolState.PLAY)send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(component));else{forceClose();return;}channel().eventLoop().schedule(()->channel().close(),50,TimeUnit.MILLISECONDS);}
+    public void disconnect(String reason){if(!isOpen())return;net.kyori.adventure.text.Component component=net.kyori.adventure.text.Component.text(reason);if(protocolState==ProtocolState.LOGIN)send(new com.github.retrooper.packetevents.wrapper.login.server.WrapperLoginServerDisconnect(component));else if(protocolState==ProtocolState.PLAY)send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDisconnect(component));else{forceClose();return;}channel().eventLoop().schedule(()->channel().close(),50,TimeUnit.MILLISECONDS);}
     public void forceClose(){if(channel().isOpen())channel().close();}
 
     public void spawnAtSpawn() {
@@ -155,9 +155,10 @@ public class ServerPlayer extends Entity {
         lastAttacker=attacker;
         damage(applied);
         sendHealth();
-        net.vibmc.world.Effects.status(this,net.vibmc.world.Effects.STATUS_HURT);
-        if(source.hurtSound()!=null)net.vibmc.world.Effects.sound(world,x,y,z,source.hurtSound(),
-                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+        net.vibmc.world.Effects.status(this, net.vibmc.world.Effects.STATUS_HURT);
+        String sound = source.hurtSound();
+        if (sound != null) net.vibmc.world.Effects.sound(world, x, y, z, sound,
+                net.vibmc.world.Effects.Category.PLAYERS, 1.0f, 1.0f);
         return true;
     }
 
@@ -169,9 +170,8 @@ public class ServerPlayer extends Entity {
     protected void onDeath(){
         if(!isInWorld())return;
         net.vibmc.world.Effects.status(this,net.vibmc.world.Effects.STATUS_DEATH);
-        net.vibmc.world.Effects.sound(world,x,y,z,
-                com.github.retrooper.packetevents.protocol.sound.Sounds.ENTITY_PLAYER_DEATH,
-                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+        net.vibmc.world.Effects.sound(world,x,y,z,"entity.player.death",
+                net.vibmc.world.Effects.Category.PLAYERS,1.0f,1.0f);
         VibMC server=VibMC.getInstance();
         if(server==null||username==null)return;
         String message=lastDamageSource.deathMessage(username,lastAttacker);
@@ -253,9 +253,9 @@ public class ServerPlayer extends Entity {
     private boolean isSafeStandingPosition(double testX,double testY,double testZ){
         int bx=(int)Math.floor(testX),by=(int)Math.floor(testY),bz=(int)Math.floor(testZ);
         if(by<1||by>=255)return false;
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState feet=world.getBlockAt(bx,by,bz);
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState head=world.getBlockAt(bx,by+1,bz);
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState floor=world.getBlockAt(bx,by-1,bz);
+        net.vibmc.world.block.BlockState feet=world.getBlockAt(bx,by,bz);
+        net.vibmc.world.block.BlockState head=world.getBlockAt(bx,by+1,bz);
+        net.vibmc.world.block.BlockState floor=world.getBlockAt(bx,by-1,bz);
         return net.vibmc.world.Blocks.same(feet,net.vibmc.world.Blocks.AIR)
                 &&net.vibmc.world.Blocks.same(head,net.vibmc.world.Blocks.AIR)
                 &&!net.vibmc.world.Blocks.same(floor,net.vibmc.world.Blocks.AIR)
@@ -310,9 +310,9 @@ public class ServerPlayer extends Entity {
         int blockX = (int) Math.floor(x);
         int blockY = (int) Math.floor(y);
         int blockZ = (int) Math.floor(z);
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState feet = world.getChunk(Math.floorDiv(blockX, 16), Math.floorDiv(blockZ, 16))
+        net.vibmc.world.block.BlockState feet = world.getChunk(Math.floorDiv(blockX, 16), Math.floorDiv(blockZ, 16))
                 .getBlock(Math.floorMod(blockX, 16), blockY, Math.floorMod(blockZ, 16));
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState below = world.getChunk(Math.floorDiv(blockX, 16), Math.floorDiv(blockZ, 16))
+        net.vibmc.world.block.BlockState below = world.getChunk(Math.floorDiv(blockX, 16), Math.floorDiv(blockZ, 16))
                 .getBlock(Math.floorMod(blockX, 16), Math.max(0, blockY - 1), Math.floorMod(blockZ, 16));
         boolean netherPortal = net.vibmc.world.Blocks.same(feet, net.vibmc.world.Blocks.NETHER_PORTAL);
         boolean endPortal = net.vibmc.world.Blocks.same(feet, net.vibmc.world.Blocks.END_PORTAL)
@@ -587,9 +587,11 @@ public class ServerPlayer extends Entity {
 
     public void sendInventory() {
         if(user==null)return;
-        java.util.List<ItemStack> items=new java.util.ArrayList<>();
-        for(int slot=0;slot<46;slot++)items.add(windowSlot(slot));
-        send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,items,ItemStack.EMPTY));
+        net.vibmc.network.PacketWriter writer = net.vibmc.network.PacketWriter.out(0x14);
+        writer.writeByte(0);
+        writer.writeShort(46);
+        for(int slot=0;slot<46;slot++)writer.writeSlot(windowSlot(slot));
+        net.vibmc.network.PacketSender.send(user, writer);
     }
 
     /**

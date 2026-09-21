@@ -1,7 +1,7 @@
 package net.vibmc.world.structure;
 
 import net.vibmc.world.Blocks;
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.WorldEnvironment;
 
 import java.util.ArrayList;
@@ -13,8 +13,8 @@ import java.util.Set;
 public final class StructureTemplate {
     public static final class Entry {
         public final int x, y, z;
-        public final WrappedBlockState block;
-        Entry(int x, int y, int z, WrappedBlockState block) { this.x=x; this.y=y; this.z=z; this.block=block; }
+        public final BlockState block;
+        Entry(int x, int y, int z, BlockState block) { this.x=x; this.y=y; this.z=z; this.block=block; }
     }
 
     private final String name;
@@ -45,7 +45,7 @@ public final class StructureTemplate {
     public List<Entry> blocks(){return blocks;}
     public boolean allows(String biome){return (includedBiomes.isEmpty()||includedBiomes.contains(biome))&&!excludedBiomes.contains(biome);}
 
-    static WrappedBlockState blockByName(String name) {
+    static BlockState blockByName(String name) {
         String n=name.trim().toLowerCase().replace("minecraft:","");
         switch(n){
             case "oak_log": case "log": return Blocks.WOOD;
