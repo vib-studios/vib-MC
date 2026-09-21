@@ -38,38 +38,14 @@ dependencies {
     testImplementation 'org.junit.platform:junit-platform-launcher'
 }
 
-// Keep the full minecraft-data submodule available to developers, but only package the
-// Java-edition registry/configuration snapshots used by the runtime loader.
-def minecraftDataRoot = file('src/main/resources/vendored/minecraft-data')
+// The full minecraft-data submodule stays available to developers as a reference, but is
+// never packaged into the jar; the runtime only reads the vendored ViaVersion snapshot.
 sourceSets.main.resources.exclude 'vendored/minecraft-data/**'
-processResources {
-    from(minecraftDataRoot) {
-        into 'vendored/minecraft-data'
-        include 'data/dataPaths.json'
-        include 'data/pc/common/protocolVersions.json'
-        include 'data/pc/common/versions.json'
-        include 'data/pc/*/version.json'
-        include 'data/pc/*/loginPacket.json'
-    }
-}
-
-tasks.register('verifyMinecraftDataResources') {
-    dependsOn tasks.named('processResources')
-    doLast {
-        def root = layout.buildDirectory.dir('resources/main/vendored/minecraft-data').get().asFile
-        fileTree(root).files.each { file ->
-            def path = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-            def allowed = path == 'data/dataPaths.json' ||
-                    path == 'data/pc/common/protocolVersions.json' ||
-                    path == 'data/pc/common/versions.json' ||
-                    path.matches('data/pc/[^/]+/(version|loginPacket)\\.json')
-            if (!allowed) throw new GradleException("Unexpected bundled minecraft-data resource: ${path}")
-        }
-    }
-}
 
 test {
     useJUnitPlatform()
+    maxParallelForks = Math.max(1, Runtime.getRuntime().availableProcessors().intdiv(2))
+    maxHeapSize = '512m'
     testLogging {
         events "passed", "skipped", "failed"
         exceptionFormat "full"
@@ -102,7 +78,6 @@ shadowJar {
 }
 
 build.dependsOn shadowJar
-tasks.named('check') { dependsOn tasks.named('verifyMinecraftDataResources') }
 
 tasks.named('startScripts') {
     dependsOn shadowJar
