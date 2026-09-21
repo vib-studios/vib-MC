@@ -2,7 +2,6 @@ package net.vibmc.network.packetevents;
 
 import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.util.Vector3i;
@@ -80,10 +79,10 @@ public final class VibGameplayPacketListener implements PacketListener {
         } else if (event.getPacketType() == PacketType.Play.Client.CREATIVE_INVENTORY_ACTION) {
             WrapperPlayClientCreativeInventoryAction wrapper = new WrapperPlayClientCreativeInventoryAction(event);
             int slot = wrapper.getSlot();
-            ItemStack stack = wrapper.getItemStack();
+            com.github.retrooper.packetevents.protocol.item.ItemStack stack = wrapper.getItemStack();
             submit(player, () -> {
                 if (player.getGameModeEnum() == GameMode.CREATIVE && slot >= 36 && slot <= 44) {
-                    player.getInventory().setSlot(slot - 36, stack);
+                    player.getInventory().setSlot(slot - 36, toVibItem(stack));
                 }
             });
             event.setCancelled(true);
@@ -138,6 +137,20 @@ public final class VibGameplayPacketListener implements PacketListener {
                 || event.getPacketType() == PacketType.Play.Client.PLUGIN_MESSAGE) {
             event.setCancelled(true);
         }
+    }
+
+    /**
+     * Translates a PacketEvents slot into vib-MC's item model. Protocol-340 slots carry their
+     * variant in the pre-1.13 metadata field, which PacketEvents exposes as {@code legacyData}.
+     * Compound-tag contents (e.g. enchantments) are not yet walked into adventure-nbt.
+     */
+    private static net.vibmc.inventory.ItemStack toVibItem(com.github.retrooper.packetevents.protocol.item.ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return net.vibmc.inventory.ItemStack.EMPTY;
+        String name = stack.getType().getName().toString();
+        if (name.startsWith("minecraft:")) name = name.substring("minecraft:".length());
+        net.vibmc.inventory.ItemType type = net.vibmc.inventory.ItemType.of(name);
+        return new net.vibmc.inventory.ItemStack(type, stack.getAmount(), stack.getLegacyData(),
+                net.kyori.adventure.nbt.CompoundBinaryTag.empty());
     }
 
     private static void submit(ServerPlayer player, Runnable action) {

@@ -1,8 +1,5 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-
 import java.util.Locale;
 
 /** Melee damage per held item, using 1.12.2 values. A bare hand does one heart. */
@@ -30,8 +27,6 @@ public final class Weapons {
     }
 
     private static String key(ItemType type) {
-        String name = type.getName().toString().toLowerCase(Locale.ROOT);
-        int colon = name.indexOf(':');
-        return colon < 0 ? name : name.substring(colon + 1);
+        return type.name().toLowerCase(Locale.ROOT);
     }
 }

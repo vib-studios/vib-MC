@@ -31,13 +31,11 @@ public final class HandshakeHandler implements PacketHandler {
 
         connection.setProtocolState(ProtocolState.LOGIN);
         ClientVersion activeVersion = connection.getUser().getClientVersion();
-        if (isKnownBrokenVersion(activeVersion)) {
+        if (!isSupportedProtocol(protocol) || activeVersion != ClientVersion.V_1_12_2) {
             VibMC.getInstance().getLogger().warn(
-                    "Rejecting known-broken protocol %d (%s)",protocol,activeVersion.getReleaseName());
-            if(activeVersion==ClientVersion.V_1_19_3)
-                connection.disconnect("Minecraft 1.19.3 is unsupported due to a PacketEvents login parsing issue.");
-            else
-                connection.disconnect("Minecraft 1.16 and 1.16.1 are unsupported due to PacketEvents packet ID issues.");
+                    "Rejecting protocol %d (%s): vib-MC supports only vanilla 1.12.2 (protocol 340)",
+                    protocol, activeVersion.getReleaseName());
+            connection.disconnect("This server supports only Minecraft 1.12.2.");
             return;
         }
         VibMC.getInstance().getLogger().info(
@@ -72,9 +70,12 @@ public final class HandshakeHandler implements PacketHandler {
         connection.setHandler(new LoginHandler());
     }
 
-    static boolean isKnownBrokenVersion(ClientVersion version){
-        return version==ClientVersion.V_1_16||version==ClientVersion.V_1_16_1
-                ||version==ClientVersion.V_1_19_3;
+    /**
+     * Whether a handshake protocol version is the ones this server serves. Only the vanilla
+     * 1.12.2 protocol (340) is implemented.
+     */
+    public static boolean isSupportedProtocol(int protocolVersion) {
+        return protocolVersion == 340;
     }
 
     private static boolean isTrustedProxy(ServerPlayer connection, String expectedAddress) {

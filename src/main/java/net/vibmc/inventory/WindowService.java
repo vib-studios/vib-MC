@@ -1,14 +1,11 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.sound.SoundCategory;
-import com.github.retrooper.packetevents.protocol.sound.Sounds;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientClickWindow.WindowClickType;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerCloseWindow;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerOpenWindow;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 import net.vibmc.entity.ServerPlayer;
+import net.vibmc.network.PacketSender;
+import net.vibmc.network.PacketWriter;
 import net.vibmc.player.GameMode;
 import net.vibmc.world.Effects;
 
@@ -22,12 +19,19 @@ import java.util.List;
  * than trusting the client's predicted state. That costs a packet per click and makes the
  * unsupported click types (drag-crafting, double-click collect) harmless: the client simply
  * snaps back to what the server holds.
+ *
+ * <p>Window contents are sent as raw window-items/set-slot packets: protocol 340 does not
+ * include the carried item in {@code WindowItems}, and PacketEvents' window wrappers use the
+ * post-1.17 data model that drops it.
  */
 public final class WindowService {
     /** Window 0 is always the player's own inventory. */
     private static final int PLAYER_WINDOW = 0;
     /** Cursor slot in Set Slot, per the vanilla protocol. */
     private static final int CARRIED_SLOT = -1;
+    /** Clientbound packet ids for protocol 340. */
+    private static final int SET_WINDOW_ITEMS = 0x14;
+    private static final int SET_SLOT = 0x16;
 
     private WindowService() {}
 
@@ -35,12 +39,9 @@ public final class WindowService {
         if (player.getUser() == null) return;
         player.setOpenWindow(session);
         net.kyori.adventure.text.Component title = net.kyori.adventure.text.Component.text(session.type().title());
-        boolean modern = player.getUser().getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_14);
-        player.getUser().sendPacket(modern
-                ? new WrapperPlayServerOpenWindow(session.windowId(), session.type().modernType(), title)
-                : new WrapperPlayServerOpenWindow(session.windowId(), session.type().legacyId(), title,
-                        session.type().topSize(), 0));
+        // 1.12 uses the legacy named inventory type, window count, and an entity id of zero.
+        player.getUser().sendPacket(new WrapperPlayServerOpenWindow(session.windowId(), session.type().legacyId(),
+                title, session.type().topSize(), 0));
         refresh(player);
     }
 
@@ -55,7 +56,7 @@ public final class WindowService {
             }
             if (session.type() == WindowSession.Type.CHEST) {
                 Effects.sound(player.getWorld(), player.getX(), player.getY(), player.getZ(),
-                        Sounds.BLOCK_CHEST_CLOSE, SoundCategory.BLOCK, 0.5f, 1.0f);
+                        "block.chest.close", Effects.Category.BLOCKS, 0.5f, 1.0f);
             }
             player.setOpenWindow(null);
         }
@@ -95,8 +96,6 @@ public final class WindowService {
     /** Answers the client's transaction so its inventory stops waiting on us. */
     private static void confirm(ServerPlayer player, int windowId, int actionNumber) {
         if (player.getUser() == null || actionNumber < 0) return;
-        if (player.getUser().getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_17)) return;
         player.getUser().sendPacket(new com.github.retrooper.packetevents.wrapper.play.server
                 .WrapperPlayServerWindowConfirmation(windowId, (short) actionNumber, true));
     }
@@ -157,7 +156,7 @@ public final class WindowService {
             if (!carried.isEmpty()) taken.setAmount(carried.getAmount() + clicked.getAmount());
             player.setCarriedItem(taken);
             craftingGrid(player, session).consumeIngredients();
-            Effects.soundTo(player, Sounds.ENTITY_ITEM_PICKUP, SoundCategory.PLAYER, 0.3f, 1.6f);
+            Effects.soundTo(player, "entity.item.pickup", Effects.Category.PLAYERS, 0.3f, 1.6f);
             return;
         }
 
@@ -296,17 +295,26 @@ public final class WindowService {
         return offset < 27 ? 9 + offset : offset - 27;
     }
 
-    /** Pushes the authoritative window contents and cursor back to the client. */
+    /**
+     * Pushes the authoritative window contents and cursor back to the client. Protocol 340
+     * carries no cursor in Window Items, so the carried stack travels in its own Set Slot.
+     */
     public static void refresh(ServerPlayer player) {
         if (player.getUser() == null) return;
         WindowSession session = player.getOpenWindow();
         if (session == null) {
             player.sendInventory();
         } else {
-            List<ItemStack> items = new ArrayList<>();
-            for (int slot = 0; slot < session.size(); slot++) items.add(get(player, session, slot));
-            player.getUser().sendPacket(new WrapperPlayServerWindowItems(session.windowId(), 0, items, ItemStack.EMPTY));
+            PacketWriter items = PacketWriter.out(SET_WINDOW_ITEMS);
+            items.writeByte(session.windowId());
+            items.writeShort(session.size());
+            for (int slot = 0; slot < session.size(); slot++) items.writeSlot(get(player, session, slot));
+            PacketSender.send(player.getUser(), items);
         }
-        player.getUser().sendPacket(new WrapperPlayServerSetSlot(CARRIED_SLOT, 0, CARRIED_SLOT, player.getCarriedItem()));
+        PacketWriter cursor = PacketWriter.out(SET_SLOT);
+        cursor.writeByte(-1);
+        cursor.writeUnsignedShort(-1);
+        cursor.writeSlot(player.getCarriedItem());
+        PacketSender.send(player.getUser(), cursor);
     }
 }

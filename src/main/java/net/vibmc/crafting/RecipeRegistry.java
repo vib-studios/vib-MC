@@ -1,8 +1,8 @@
 package net.vibmc.crafting;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
 
 import java.util.ArrayList;
 import java.util.List;

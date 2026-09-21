@@ -44,7 +44,7 @@ public final class PortalDetector {
             for (int dy = 0; dy < 5; dy++) {
                 int x = alongX ? startA + a : fixed;
                 int z = alongX ? fixed : startA + a;
-                com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block = world.getBlockAt(x, baseY + dy, z);
+                net.vibmc.world.block.BlockState block = world.getBlockAt(x, baseY + dy, z);
                 boolean frame = a == 0 || a == 3 || dy == 0 || dy == 4;
                 if (frame ? !Blocks.same(block,Blocks.OBSIDIAN)
                         : !Blocks.same(block,Blocks.AIR) && !Blocks.same(block,Blocks.NETHER_PORTAL)) {

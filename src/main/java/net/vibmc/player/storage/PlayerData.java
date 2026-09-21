@@ -1,6 +1,6 @@
 package net.vibmc.player.storage;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
+import net.vibmc.inventory.ItemStack;
 import net.vibmc.player.GameMode;
 
 /** Immutable versioned snapshot of gameplay state persisted by authenticated UUID. */

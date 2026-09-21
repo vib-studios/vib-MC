@@ -9,7 +9,6 @@ import com.github.retrooper.packetevents.wrapper.login.client.WrapperLoginClient
 import com.github.retrooper.packetevents.wrapper.status.client.WrapperStatusClientPing;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.HandshakeRequest;
-import net.vibmc.network.handler.ConfigurationHandler;
 import net.vibmc.network.handler.HandshakeHandler;
 import net.vibmc.network.handler.LoginHandler;
 import net.vibmc.network.handler.PacketHandler;
@@ -67,29 +66,6 @@ public final class VibLifecyclePacketListener implements PacketListener {
             ((LoginHandler) handler).receiveEncryptionResponse(connection,
                     wrapper.getEncryptedSharedSecret(),
                     wrapper.getEncryptedVerifyToken().orElse(new byte[0]));
-        } else if (event.getPacketType() == PacketType.Login.Client.LOGIN_SUCCESS_ACK) {
-            event.setCancelled(true);
-            if (!(handler instanceof ConfigurationHandler)) {
-                rejectInvalidSequence(connection);return;
-            }
-            ((ConfigurationHandler)handler).begin(connection);
-        } else if (event.getPacketType() == PacketType.Configuration.Client.SELECT_KNOWN_PACKS) {
-            event.setCancelled(true);
-            if (!(handler instanceof ConfigurationHandler)) {
-                rejectInvalidSequence(connection);return;
-            }
-            // vib-MC sends the complete registry set regardless of the client's selection.
-            ((ConfigurationHandler)handler).knownPacksSelected(connection);
-        } else if (event.getPacketType() == PacketType.Configuration.Client.CONFIGURATION_END_ACK) {
-            event.setCancelled(true);
-            if (!(handler instanceof ConfigurationHandler)) {
-                rejectInvalidSequence(connection);return;
-            }
-            ((ConfigurationHandler)handler).complete(connection);
-        } else if (event.getPacketType() == PacketType.Configuration.Client.CLIENT_SETTINGS
-                || event.getPacketType() == PacketType.Configuration.Client.PLUGIN_MESSAGE) {
-            event.setCancelled(true);
-            if (!(handler instanceof ConfigurationHandler)) rejectInvalidSequence(connection);
         }
     }
 

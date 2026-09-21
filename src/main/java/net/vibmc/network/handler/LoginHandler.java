@@ -116,12 +116,6 @@ public final class LoginHandler implements PacketHandler {
         connection.setProfileUuid(uuid);
         connection.getUser().sendPacket(new com.github.retrooper.packetevents.wrapper.login.server.WrapperLoginServerLoginSuccess(
                 connection.getUser().getProfile()));
-        if(connection.getUser().getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)){
-            connection.setProtocolState(ProtocolState.CONFIGURATION);
-            connection.setHandler(new ConfigurationHandler(username,uuid));
-            return;
-        }
         connection.setProtocolState(ProtocolState.PLAY);
         connection.setHandler(new PlayHandler(connection));
         com.github.retrooper.packetevents.PacketEvents.getAPI().getInjector().setPlayer(connection.channel(),connection);

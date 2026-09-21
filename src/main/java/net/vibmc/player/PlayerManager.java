@@ -176,7 +176,6 @@ public class PlayerManager {
             sendHeldItemChange(player.getUser(),player);
             sendUpdateHealth(player.getUser(),player);
             player.sendInventory();
-            sendStartWaitingForChunks(player.getUser());
             synchronizePlayerVisibility(player);
             sendInitialChunks(player);
             sendWeather(player.getUser(),player.getWorld().weatherSystem().weather());
@@ -219,7 +218,6 @@ public class PlayerManager {
             sendHeldItemChange(player.getUser(),player);
             sendUpdateHealth(player.getUser(),player);
             player.sendInventory();
-            sendStartWaitingForChunks(player.getUser());
             synchronizePlayerVisibility(player);
             sendInitialChunks(player);
             sendWeather(player.getUser(), destination.weatherSystem().weather());
@@ -272,16 +270,7 @@ public class PlayerManager {
     }
 
     private void sendPlayerGameMode(User user, ServerPlayer player) {
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_19_3)){
-            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo info=
-                    new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
-                            profile(player),true,0,mode(player),null,null);
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate(
-                    com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_GAME_MODE,info));
-        }else{
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.UPDATE_GAME_MODE,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,profile(player),mode(player),0)));
-        }
+        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.UPDATE_GAME_MODE,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,profile(player),mode(player),0)));
     }
 
     private void sendInvisibleMetadata(User user, ServerPlayer player, boolean invisible) {
@@ -308,16 +297,25 @@ public class PlayerManager {
 
     /** Held item and worn armour, so other players see equipment rather than a bare skin. */
     public void broadcastEquipment(ServerPlayer changed){
-        java.util.List<com.github.retrooper.packetevents.protocol.player.Equipment> equipment=new java.util.ArrayList<>();
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.MAIN_HAND,changed.getInventory().getSlot(changed.getHeldItemSlot())));
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.OFF_HAND,changed.getOffhandItem()));
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.HELMET,changed.getArmorPiece(net.vibmc.inventory.Armor.HELMET)));
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.CHEST_PLATE,changed.getArmorPiece(net.vibmc.inventory.Armor.CHESTPLATE)));
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.LEGGINGS,changed.getArmorPiece(net.vibmc.inventory.Armor.LEGGINGS)));
-        equipment.add(new com.github.retrooper.packetevents.protocol.player.Equipment(com.github.retrooper.packetevents.protocol.player.EquipmentSlot.BOOTS,changed.getArmorPiece(net.vibmc.inventory.Armor.BOOTS)));
+        // Protocol 340 entity-equipment: one slot per packet (0 main hand, 1 off hand,
+        // 2 boots, 3 leggings, 4 chestplate, 5 helmet), so PacketEvents' multi-slot wrapper
+        // is replaced with raw packets.
+        net.vibmc.inventory.ItemStack[] worn=new net.vibmc.inventory.ItemStack[6];
+        worn[0]=changed.getInventory().getSlot(changed.getHeldItemSlot());
+        worn[1]=changed.getOffhandItem();
+        worn[2]=changed.getArmorPiece(net.vibmc.inventory.Armor.BOOTS);
+        worn[3]=changed.getArmorPiece(net.vibmc.inventory.Armor.LEGGINGS);
+        worn[4]=changed.getArmorPiece(net.vibmc.inventory.Armor.CHESTPLATE);
+        worn[5]=changed.getArmorPiece(net.vibmc.inventory.Armor.HELMET);
         for(ServerPlayer viewer:players.values()){
             if(viewer==changed||viewer.getWorld()!=changed.getWorld())continue;
-            send(viewer.getUser(),new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment(changed.getEntityId(),equipment));
+            for(int slot=0;slot<worn.length;slot++){
+                net.vibmc.network.PacketWriter writer=net.vibmc.network.PacketWriter.out(0x3C);
+                writer.writeVarInt(changed.getEntityId());
+                writer.writeVarInt(slot);
+                writer.writeSlot(worn[slot]);
+                net.vibmc.network.PacketSender.send(viewer.getUser(), writer);
+            }
         }
     }
 
@@ -359,8 +357,7 @@ public class PlayerManager {
         if(!target.hurt(damage,net.vibmc.entity.DamageSource.PLAYER,attacker.getUsername()))return;
         attacker.addExhaustion(0.1f);
         net.vibmc.world.Effects.sound(attacker.getWorld(),target.getX(),target.getY(),target.getZ(),
-                com.github.retrooper.packetevents.protocol.sound.Sounds.ENTITY_PLAYER_ATTACK_STRONG,
-                com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER,1.0f,1.0f);
+                "entity.player.attack.strong", net.vibmc.world.Effects.Category.PLAYERS,1.0f,1.0f);
         knockBack(target,dx,dz);
     }
 
@@ -385,30 +382,11 @@ public class PlayerManager {
     }
 
     private void sendPlayerInfoAdd(User user, ServerPlayer player) {
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_19_3)){
-            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo info=
-                    new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
-                            profile(player),true,0,mode(player),null,null);
-            java.util.EnumSet<com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action> actions=
-                    java.util.EnumSet.of(
-                            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.ADD_PLAYER,
-                            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_GAME_MODE,
-                            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LISTED,
-                            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LATENCY,
-                            com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_DISPLAY_NAME);
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate(actions,info));
-        }else{
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.ADD_PLAYER,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,profile(player),mode(player),0)));
-        }
+        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.ADD_PLAYER,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,profile(player),mode(player),0)));
     }
 
-    private void sendPlayerInfoRemove(User user, UUID uuid) {
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_19_3))
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoRemove(uuid));
-        else
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.REMOVE_PLAYER,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,new com.github.retrooper.packetevents.protocol.player.UserProfile(uuid,""),null,0)));
+private void sendPlayerInfoRemove(User user, UUID uuid) {
+        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo(com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.Action.REMOVE_PLAYER,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo.PlayerData(null,new com.github.retrooper.packetevents.protocol.player.UserProfile(uuid,""),null,0)));
     }
 
     private void sendSpawnPlayer(User user, ServerPlayer player) {
@@ -427,14 +405,12 @@ public class PlayerManager {
         send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities(entityId));
     }
 
-    public void broadcastBlockChange(World world, int x, int y, int z, com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState state) {
+    public void broadcastBlockChange(World world, int x, int y, int z, net.vibmc.world.block.BlockState state) {
         for (ServerPlayer player : players.values()) {
             if (player.getWorld() != world) continue;
             User user = player.getUser();
-            int stateId=net.vibmc.network.packetevents.PacketEventsStateMappings.id(
-                    state,user.getClientVersion());
             send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockChange(
-                    new com.github.retrooper.packetevents.util.Vector3i(x,y,z),stateId));
+                    new com.github.retrooper.packetevents.util.Vector3i(x,y,z),state.getGlobalId()));
         }
     }
 
@@ -484,7 +460,6 @@ public class PlayerManager {
             int configuredViewDistance = VibMC.getInstance().getConfig().getViewDistance();
             boolean centerChanged=cx!=player.getLoadedChunkX()||cz!=player.getLoadedChunkZ();
             if (!centerChanged && player.getStreamedViewDistance() >= configuredViewDistance) return;
-            if(centerChanged)sendViewPosition(player.getUser(),cx,cz);
             int viewDist = Math.min(configuredViewDistance, player.getStreamedViewDistance());
             Set<Long> wanted = new HashSet<>();
             for (int dx = -viewDist; dx <= viewDist; dx++) {
@@ -518,27 +493,11 @@ public class PlayerManager {
         send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUnloadChunk(chunkX,chunkZ));
     }
 
-    private void sendViewDistance(User user,int distance){
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_14))
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateViewDistance(distance));
-    }
-
-    private void sendViewPosition(User user,int chunkX,int chunkZ){
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_14))
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateViewPosition(chunkX,chunkZ));
-    }
-
     private void sendJoinPackets(ServerPlayer player) {
         User user = player.getUser();
         World world = player.getWorld();
-        // Resolve and cache this connection's immutable minecraft-data manifest. Individual
-        // registry files are parsed lazily when a protocol adapter requests them.
-        net.vibmc.registry.MinecraftDataRegistry.get().forClient(user.getClientVersion());
 
         sendLoginPlay(user, player);
-        sendRegistryTags(user);
         sendServerBrand(user);
         sendDifficulty(user);
         sendPlayerAbilities(user, player);
@@ -548,7 +507,6 @@ public class PlayerManager {
         sendUpdateHealth(user, player);
         player.sendInventory();
         sendPlayerPosition(user, player);
-        sendStartWaitingForChunks(user);
         synchronizePlayerVisibility(player);
 
         sendInitialChunks(player);
@@ -560,8 +518,6 @@ public class PlayerManager {
         int centerX = (int) Math.floor(player.getX()) >> 4;
         int centerZ = (int) Math.floor(player.getZ()) >> 4;
         int configuredViewDistance=VibMC.getInstance().getConfig().getViewDistance();
-        sendViewDistance(player.getUser(),configuredViewDistance);
-        sendViewPosition(player.getUser(),centerX,centerZ);
         int viewDistance = Math.min(1, configuredViewDistance);
         for (int radius = 0; radius <= viewDistance; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
@@ -579,28 +535,9 @@ public class PlayerManager {
         player.setLoadedChunk(centerX, centerZ);
     }
 
-    private void sendRegistryTags(User user) {
-        if (user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_13)
-                && user.getClientVersion().isOlderThan(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)) {
-            send(user,net.vibmc.network.packetevents.PacketEventsTags.create(user.getClientVersion()));
-        }
-    }
-
-    private void sendStartWaitingForChunks(User user){
-        if(user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_3)){
-            send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChangeGameState(
-                    com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChangeGameState.Reason.START_LOADING_CHUNKS,0.0f));
-        }
-    }
-
     private void sendServerBrand(User user) {
-        String channel = user.getClientVersion().isNewerThanOrEquals(
-                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_13)
-                ? "minecraft:brand" : "MC|Brand";
-        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPluginMessage(channel,brandData()));
+        // Protocol 340: "MC|Brand".
+        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPluginMessage("MC|Brand",brandData()));
     }
 
     private void sendLoginPlay(User user, ServerPlayer player) {
@@ -700,6 +637,6 @@ public class PlayerManager {
             default:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD_PRE_1_18;
         }
     }
-    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.MinecraftDataRegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
+    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=new com.github.retrooper.packetevents.protocol.nbt.NBTCompound();java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
 
 }

@@ -1,6 +1,6 @@
 package net.vibmc.world.structure;
 
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 
 import net.vibmc.world.WorldEnvironment;
 import java.util.LinkedHashSet;
@@ -40,7 +40,7 @@ public final class StructureLoader {
     }
 
     static StructureTemplate parse(InputStream input) throws IOException {
-        Map<Integer,WrappedBlockState> palette=new LinkedHashMap<>(); List<String> commands=new ArrayList<>();
+        Map<Integer,BlockState> palette=new LinkedHashMap<>(); List<String> commands=new ArrayList<>();
         String name="unnamed"; int sx=1,sy=1,sz=1,spacing=8,salt=1,anchorX=0,anchorZ=0; double chance=1; boolean standalone=true; WorldEnvironment env=WorldEnvironment.OVERWORLD; Set<String> included=new LinkedHashSet<>(),excluded=new LinkedHashSet<>();
         try(BufferedReader r=new BufferedReader(new InputStreamReader(input,StandardCharsets.UTF_8))){String line;
             while((line=r.readLine())!=null){line=line.trim();if(line.isEmpty()||line.startsWith("#"))continue;int eq=line.indexOf('=');if(eq<1)continue;
@@ -55,7 +55,7 @@ public final class StructureLoader {
                 else if(key.equals("fill"))commands.add("F,"+value);
             }
         }
-        List<StructureTemplate.Entry> blocks=new ArrayList<>();for(String command:commands){if(command.startsWith("B,")){int[]v=ints(command.substring(2),4);WrappedBlockState b=palette.get(v[3]);if(b==null)throw new IOException("Unknown palette state "+v[3]);blocks.add(new StructureTemplate.Entry(v[0],v[1],v[2],b));}else{int[]v=ints(command.substring(2),7);WrappedBlockState b=palette.get(v[6]);if(b==null)throw new IOException("Unknown palette state "+v[6]);int minX=Math.min(v[0],v[3]),maxX=Math.max(v[0],v[3]),minY=Math.min(v[1],v[4]),maxY=Math.max(v[1],v[4]),minZ=Math.min(v[2],v[5]),maxZ=Math.max(v[2],v[5]);for(int x=minX;x<=maxX;x++)for(int y=minY;y<=maxY;y++)for(int z=minZ;z<=maxZ;z++)blocks.add(new StructureTemplate.Entry(x,y,z,b));}}
+        List<StructureTemplate.Entry> blocks=new ArrayList<>();for(String command:commands){if(command.startsWith("B,")){int[]v=ints(command.substring(2),4);BlockState b=palette.get(v[3]);if(b==null)throw new IOException("Unknown palette state "+v[3]);blocks.add(new StructureTemplate.Entry(v[0],v[1],v[2],b));}else{int[]v=ints(command.substring(2),7);BlockState b=palette.get(v[6]);if(b==null)throw new IOException("Unknown palette state "+v[6]);int minX=Math.min(v[0],v[3]),maxX=Math.max(v[0],v[3]),minY=Math.min(v[1],v[4]),maxY=Math.max(v[1],v[4]),minZ=Math.min(v[2],v[5]),maxZ=Math.max(v[2],v[5]);for(int x=minX;x<=maxX;x++)for(int y=minY;y<=maxY;y++)for(int z=minZ;z<=maxZ;z++)blocks.add(new StructureTemplate.Entry(x,y,z,b));}}
         if(spacing<1||chance<0||chance>1)throw new IOException("Invalid placement settings for "+name);
         return new StructureTemplate(name,sx,sy,sz,spacing,salt,anchorX,anchorZ,chance,standalone,env,included,excluded,blocks);
     }

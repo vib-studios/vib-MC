@@ -1,6 +1,6 @@
 package net.vibmc.entity;
 
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.player.GameMode;
 import net.vibmc.world.Blocks;
 import net.vibmc.world.World;
@@ -108,7 +108,7 @@ final class PlayerVitals {
         for (double dx = -HALF_WIDTH; dx <= HALF_WIDTH; dx += HALF_WIDTH * 2) {
             for (double dz = -HALF_WIDTH; dz <= HALF_WIDTH; dz += HALF_WIDTH * 2) {
                 for (double dy = 0.0; dy <= 1.6; dy += 0.8) {
-                    WrappedBlockState touched = blockAt(world, player.getX() + dx,
+                    BlockState touched = blockAt(world, player.getX() + dx,
                             player.getY() + dy, player.getZ() + dz);
                     if (Blocks.isLava(touched)) { source = DamageSource.LAVA; amount = 4.0f; }
                     else if (Blocks.same(touched, Blocks.FIRE) && source != DamageSource.LAVA) {
@@ -181,7 +181,7 @@ final class PlayerVitals {
         exhaustion += amount;
     }
 
-    private static WrappedBlockState blockAt(World world, double x, double y, double z) {
+    private static BlockState blockAt(World world, double x, double y, double z) {
         return world.getBlockAt((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
     }
 }

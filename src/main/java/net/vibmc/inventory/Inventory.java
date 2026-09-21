@@ -1,11 +1,8 @@
 package net.vibmc.inventory;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemType;
-
 import java.util.Objects;
 
-/** Server-owned inventory using PacketEvents' semantic item stacks directly. */
+/** Server-owned inventory using vib-MC's semantic item stacks directly. */
 public final class Inventory {
     private final ItemStack[] slots;
     private final String title;

@@ -1,6 +1,6 @@
 package net.vibmc.world.gen;
 
-import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import net.vibmc.world.block.BlockState;
 import net.vibmc.world.Blocks;
 
 /**
@@ -15,10 +15,10 @@ import net.vibmc.world.Blocks;
 public final class OreGenerator {
     /** One ore's distribution: grid size, how often a cell seeds a vein, height band, size. */
     private static final class Vein {
-        final WrappedBlockState block;
+        final BlockState block;
         final int cell, minY, maxY, salt;
         final double chance, radius;
-        Vein(WrappedBlockState block, int cell, double chance, int minY, int maxY, double radius, int salt) {
+        Vein(BlockState block, int cell, double chance, int minY, int maxY, double radius, int salt) {
             this.block = block; this.cell = cell; this.chance = chance;
             this.minY = minY; this.maxY = maxY; this.radius = radius; this.salt = salt;
         }
@@ -37,7 +37,7 @@ public final class OreGenerator {
     private OreGenerator() {}
 
     /** The ore belonging at this position, or null for ordinary stone. */
-    public static WrappedBlockState oreAt(TerrainGenerator terrain, int x, int y, int z) {
+    public static BlockState oreAt(TerrainGenerator terrain, int x, int y, int z) {
         for (Vein vein : VEINS) {
             if (y < vein.minY || y > vein.maxY) continue;
             int cellX = Math.floorDiv(x, vein.cell);
