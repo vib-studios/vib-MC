@@ -60,8 +60,8 @@ class DimensionGenerationTest {
         return false;
     }
 
-    private static boolean contains(WorldChunk chunk, com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState expected) {
-        for (com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block : chunk.blocks()) if (Blocks.same(block, expected)) return true;
+    private static boolean contains(WorldChunk chunk, net.vibmc.world.block.BlockState expected) {
+        for (net.vibmc.world.block.BlockState block : chunk.blocks()) if (Blocks.same(block, expected)) return true;
         return false;
     }
 }

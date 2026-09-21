@@ -1,8 +1,10 @@
 package net.vibmc.world;
 
 import net.vibmc.entity.ServerPlayer;
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemTypes;
+import net.vibmc.world.block.Axis;
+import net.vibmc.world.block.Facing;
 import net.vibmc.world.storage.WorldStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -71,13 +73,11 @@ class BlockInteractionPersistenceTest {
 
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.OAK_LOG).amount(1).build());
         BlockInteractionService.place(player,0,90,0,5);
-        assertEquals(com.github.retrooper.packetevents.protocol.world.states.enums.Axis.X,
-                world.getBlockAt(1,90,0).getAxis());
+        assertEquals(Axis.X, world.getBlockAt(1,90,0).getAxis());
 
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.FURNACE).amount(1).build());
         BlockInteractionService.place(player,3,90,0,1);
-        assertEquals(com.github.retrooper.packetevents.protocol.world.BlockFace.NORTH,
-                world.getBlockAt(3,91,0).getFacing());
+        assertEquals(Facing.NORTH, world.getBlockAt(3,91,0).getFacing());
     }
 
     @Test

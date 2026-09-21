@@ -1,12 +1,14 @@
 package net.vibmc.world;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import net.vibmc.entity.DamageSource;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.inventory.Armor;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemType;
+import net.vibmc.inventory.ItemTypes;
 import net.vibmc.inventory.Weapons;
+import net.vibmc.world.block.Facing;
+import net.vibmc.world.block.BlockState;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -20,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SurvivalMechanicsTest {
     private static final Random RANDOM = new Random(1234L);
 
-    private static ItemStack stack(com.github.retrooper.packetevents.protocol.item.type.ItemType type) {
-        return ItemStack.builder().type(type).amount(1).version(ClientVersion.V_1_12_2).build();
+    private static ItemStack stack(ItemType type) {
+        return ItemStack.builder().type(type).amount(1).build();
     }
 
     private static ServerPlayer player() {
@@ -83,12 +85,10 @@ class SurvivalMechanicsTest {
     void containersAreRecognisedAfterPlacementRotatesThem() {
         // A placed chest carries a facing property, so an exact state comparison misses it
         // and the window never opens.
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState facing =
-                Blocks.CHEST.clone();
-        facing.setFacing(com.github.retrooper.packetevents.protocol.world.BlockFace.EAST);
+        BlockState facing = Blocks.CHEST.clone();
+        facing.setFacing(Facing.EAST);
         assertFalse(Blocks.same(facing, Blocks.CHEST), "a rotated chest is a different state");
-        assertTrue(Blocks.isType(facing,
-                com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.CHEST),
+        assertTrue(Blocks.isType(facing, Blocks.CHEST.getType()),
                 "but it is still a chest");
     }
 

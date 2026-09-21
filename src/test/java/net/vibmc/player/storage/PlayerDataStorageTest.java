@@ -1,9 +1,8 @@
 package net.vibmc.player.storage;
 
-import com.github.retrooper.packetevents.protocol.item.ItemStack;
-import com.github.retrooper.packetevents.protocol.item.type.ItemTypes;
-import com.github.retrooper.packetevents.protocol.nbt.NBTString;
-import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import net.kyori.adventure.nbt.CompoundBinaryTag;
+import net.vibmc.inventory.ItemStack;
+import net.vibmc.inventory.ItemTypes;
 import net.vibmc.player.GameMode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,10 +21,9 @@ class PlayerDataStorageTest {
     void completePlayerStateAndItemNbtRoundTrip() throws Exception {
         PlayerDataStorage storage = new PlayerDataStorage(temporaryDirectory.resolve("playerdata"));
         UUID uuid = UUID.randomUUID();
-        ItemStack sword = ItemStack.builder().type(ItemTypes.DIAMOND_SWORD).amount(1)
-                .version(ClientVersion.V_1_12_2).build();
+        ItemStack sword = ItemStack.builder().type(ItemTypes.DIAMOND_SWORD).amount(1).build();
         sword.setDamageValue(27);
-        sword.getOrCreateTag().setTag("owner", new NBTString("test-player"));
+        sword.setNBT(CompoundBinaryTag.builder().putString("owner", "test-player").build());
         ItemStack[] inventory = new ItemStack[36];
         for (int i = 0; i < inventory.length; i++) inventory[i] = ItemStack.EMPTY;
         inventory[4] = sword;
@@ -47,7 +45,7 @@ class PlayerDataStorageTest {
         assertEquals(4, actual.heldItemSlot);
         assertEquals(ItemTypes.DIAMOND_SWORD, actual.inventory[4].getType());
         assertEquals(27, actual.inventory[4].getDamageValue());
-        assertEquals(new NBTString("test-player"), actual.inventory[4].getNBT().getTagOrNull("owner"));
+        assertEquals("test-player", actual.inventory[4].getNBT().getString("owner"));
     }
 
     @Test

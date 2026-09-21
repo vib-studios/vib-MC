@@ -18,9 +18,9 @@ class OreAndDesertGenerationTest {
         for (int x = 0; x < 160; x++) {
             for (int z = 0; z < 160; z++) {
                 for (int y = 6; y < 90; y += 3) {
-                    com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState ore =
+                    net.vibmc.world.block.BlockState ore =
                             OreGenerator.oreAt(terrain, x, y, z);
-                    if (ore != null) found.add(ore.getType().getName().toString());
+                    if (ore != null) found.add(ore.getType().name());
                 }
             }
         }
@@ -56,9 +56,9 @@ class OreAndDesertGenerationTest {
     }
 
     private static boolean sameOre(TerrainGenerator terrain, int x, int y, int z, int nx, int ny, int nz) {
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState first =
+        net.vibmc.world.block.BlockState first =
                 OreGenerator.oreAt(terrain, x, y, z);
-        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState second =
+        net.vibmc.world.block.BlockState second =
                 OreGenerator.oreAt(terrain, nx, ny, nz);
         return first != null && second != null && Blocks.same(first, second);
     }
@@ -69,7 +69,7 @@ class OreAndDesertGenerationTest {
         for (int x = 0; x < 200; x++) {
             for (int z = 0; z < 200; z++) {
                 for (int y = 40; y < 120; y += 2) {
-                    com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState ore =
+                    net.vibmc.world.block.BlockState ore =
                             OreGenerator.oreAt(terrain, x, y, z);
                     if (ore == null) continue;
                     assertTrue(!Blocks.same(ore, Blocks.DIAMOND_ORE) && !Blocks.same(ore, Blocks.REDSTONE_ORE),
