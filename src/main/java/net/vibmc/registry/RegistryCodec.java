@@ -390,7 +390,21 @@ public final class RegistryCodec {
                 NBT child = entry.getValue();
                 if (child instanceof NBTString && "minecraft:damage_item".equals(((NBTString) child).getValue())) {
                     compound.setTag(entry.getKey(), new NBTString("minecraft:change_item_damage"));
-                } else rewriteRenamedEnchantmentEffects(child);
+                } else if ("predicate".equals(entry.getKey()) && child instanceof NBTCompound) {
+                    NBTCompound pred = (NBTCompound) child;
+                    NBT typeSpec = pred.getTagOrNull("type_specific");
+                    if (typeSpec instanceof NBTCompound) {
+                        NBTCompound tsComp = (NBTCompound) typeSpec;
+                        NBT innerType = tsComp.getTagOrNull("type");
+                        if (innerType != null) {
+                            pred.removeTag("type_specific");
+                            pred.setTag("type", innerType.copy());
+                        }
+                    }
+                    rewriteRenamedEnchantmentEffects(child);
+                } else {
+                    rewriteRenamedEnchantmentEffects(child);
+                }
             }
         } else if (tag instanceof NBTList) {
             NBTList list = (NBTList) tag;
@@ -398,7 +412,9 @@ public final class RegistryCodec {
                 NBT child = list.getTag(i);
                 if (child instanceof NBTString && "minecraft:damage_item".equals(((NBTString) child).getValue())) {
                     list.setTag(i, new NBTString("minecraft:change_item_damage"));
-                } else rewriteRenamedEnchantmentEffects(child);
+                } else {
+                    rewriteRenamedEnchantmentEffects(child);
+                }
             }
         }
     }
