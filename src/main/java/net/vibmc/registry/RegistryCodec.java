@@ -57,7 +57,15 @@ public final class RegistryCodec {
         if (version.isOlderThan(ClientVersion.V_1_16_2)) {
             com.github.retrooper.packetevents.protocol.world.biome.Biome target =
                     com.github.retrooper.packetevents.protocol.world.biome.Biomes.getRegistry().getByName(version, biomeName);
-            return target != null ? target.getId(version) : 1;
+            if (target == null && "minecraft:nether_wastes".equals(biomeName) && version.isOlderThan(ClientVersion.V_1_16)) {
+                target = com.github.retrooper.packetevents.protocol.world.biome.Biomes.NETHER;
+            }
+            if (target == null) return 1;
+            int id = target.getId(version);
+            if (id < 0 && "minecraft:nether_wastes".equals(biomeName) && version.isOlderThan(ClientVersion.V_1_16)) {
+                id = com.github.retrooper.packetevents.protocol.world.biome.Biomes.NETHER.getId(version);
+            }
+            return id >= 0 ? id : 1;
         }
         if (usesSplitRegistries(version)) {
             List<WrapperConfigServerRegistryData.RegistryElement> biomes =
@@ -83,7 +91,15 @@ public final class RegistryCodec {
         }
         com.github.retrooper.packetevents.protocol.world.biome.Biome target =
                 com.github.retrooper.packetevents.protocol.world.biome.Biomes.getRegistry().getByName(version, biomeName);
-        return target != null ? target.getId(version) : 1;
+        if (target == null && "minecraft:nether_wastes".equals(biomeName) && version.isOlderThan(ClientVersion.V_1_16)) {
+            target = com.github.retrooper.packetevents.protocol.world.biome.Biomes.NETHER;
+        }
+        if (target == null) return 1;
+        int id = target.getId(version);
+        if (id < 0 && "minecraft:nether_wastes".equals(biomeName) && version.isOlderThan(ClientVersion.V_1_16)) {
+            id = com.github.retrooper.packetevents.protocol.world.biome.Biomes.NETHER.getId(version);
+        }
+        return id >= 0 ? id : 1;
     }
 
     private static RegistryData data(ClientVersion version) {
