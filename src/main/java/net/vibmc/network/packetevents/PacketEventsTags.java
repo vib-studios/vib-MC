@@ -71,12 +71,17 @@ public final class PacketEventsTags {
                                 NBTCompound tagEntry = (NBTCompound) itemObj;
                                 String tagName = tagEntry.getStringTagValueOrDefault("name", "");
                                 List<Integer> tagValues = new ArrayList<>();
-                                NBT tagVal = tagEntry.getTagOrNull("values");
-                                if (tagVal instanceof NBTIntArray) {
-                                    for (int v : ((NBTIntArray) tagVal).getValue()) tagValues.add(v);
-                                } else if (tagVal instanceof NBTList) {
-                                    for (Object v : ((NBTList<?>) tagVal).getTags()) {
-                                        if (v instanceof NBTNumber) tagValues.add(((NBTNumber) v).getValue().intValue());
+                                NBT tVal = tagEntry.getTagOrNull("values");
+                                if (tVal instanceof NBTIntArray) {
+                                    for (int v : ((NBTIntArray) tVal).getValue()) tagValues.add(v);
+                                } else if (tVal instanceof NBTList) {
+                                    NBTCompound wrapper = new NBTCompound();
+                                    for (Object v : ((NBTList<?>) tVal).getTags()) {
+                                        if (v instanceof NBT) {
+                                            wrapper.setTag("v", (NBT) v);
+                                            Number num = wrapper.getNumberTagValueOrNull("v");
+                                            if (num != null) tagValues.add(num.intValue());
+                                        }
                                     }
                                 }
                                 addIfAbsent(tagList, new ResourceLocation(tagName), tagValues);
