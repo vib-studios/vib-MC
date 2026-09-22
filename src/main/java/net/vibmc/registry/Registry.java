@@ -127,6 +127,7 @@ public final class Registry {
         return compound;
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private static NBT readTagPayload(DataInputStream din, byte type) throws IOException {
         switch (type) {
             case 1: return new NBTByte(din.readByte());
@@ -146,7 +147,6 @@ public final class Registry {
                 byte elemTypeByte = din.readByte();
                 int count = din.readInt();
                 NBTType<?> peType = toPacketEventsType(elemTypeByte);
-                @SuppressWarnings({"rawtypes", "unchecked"})
                 NBTList peList = new NBTList(peType);
                 for (int i = 0; i < count; i++) {
                     peList.addTag(readTagPayload(din, elemTypeByte));

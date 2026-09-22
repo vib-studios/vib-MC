@@ -76,7 +76,7 @@ public final class PacketEventsTags {
                                     for (int v : ((NBTIntArray) tagVal).getValue()) tagValues.add(v);
                                 } else if (tagVal instanceof NBTList) {
                                     for (Object v : ((NBTList<?>) tagVal).getTags()) {
-                                        if (v instanceof NBTInt) tagValues.add(((NBTInt) v).getValue());
+                                        if (v instanceof NBTNumber) tagValues.add(((NBTNumber) v).getValue().intValue());
                                     }
                                 }
                                 addIfAbsent(tagList, new ResourceLocation(tagName), tagValues);
