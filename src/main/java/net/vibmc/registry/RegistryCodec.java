@@ -53,6 +53,39 @@ public final class RegistryCodec {
         return Collections.unmodifiableMap(copy);
     }
 
+    public static int biomeIndex(String biomeName, ClientVersion version) {
+        if (version.isOlderThan(ClientVersion.V_1_16_2)) {
+            com.github.retrooper.packetevents.protocol.world.biome.Biome target =
+                    com.github.retrooper.packetevents.protocol.world.biome.Biomes.getRegistry().getByName(version, biomeName);
+            return target != null ? target.getId(version) : 1;
+        }
+        if (usesSplitRegistries(version)) {
+            List<WrapperConfigServerRegistryData.RegistryElement> biomes =
+                    splitRegistries(version).get(new ResourceLocation("minecraft:worldgen/biome"));
+            if (biomes != null) {
+                ResourceLocation targetLoc = new ResourceLocation(biomeName);
+                for (int i = 0; i < biomes.size(); i++) {
+                    if (biomes.get(i).getId().equals(targetLoc)) return i;
+                }
+            }
+        } else {
+            NBTCompound codec = create(version);
+            NBTCompound registry = codec.getCompoundTagOrNull("minecraft:worldgen/biome");
+            if (registry != null) {
+                NBTList<NBTCompound> list = registry.getCompoundListTagOrNull("value");
+                if (list != null) {
+                    for (int i = 0; i < list.size(); i++) {
+                        NBTCompound entry = list.getTag(i);
+                        if (biomeName.equals(entry.getStringTagValueOrNull("name"))) return i;
+                    }
+                }
+            }
+        }
+        com.github.retrooper.packetevents.protocol.world.biome.Biome target =
+                com.github.retrooper.packetevents.protocol.world.biome.Biomes.getRegistry().getByName(version, biomeName);
+        return target != null ? target.getId(version) : 1;
+    }
+
     private static RegistryData data(ClientVersion version) {
         if (version.isOlderThan(ClientVersion.V_1_16_2)) {
             return new RegistryData("legacy", new NBTCompound(), null, Collections.emptySet(), Collections.emptyMap());
@@ -232,19 +265,43 @@ public final class RegistryCodec {
         if ("minecraft:worldgen/biome".equals(registryName)) {
             convertHexColorsToInts(value);
             NBTCompound effects = value.getCompoundTagOrNull("effects");
-            if (effects != null && version.isOlderThan(ClientVersion.V_1_21_11)) {
-                Number fog = effects.getNumberTagValueOrNull("fog_color");
-                if (fog == null || fog.intValue() == 0) {
+            if (effects == null) {
+                effects = new NBTCompound();
+                value.setTag("effects", effects);
+            }
+
+            NBTCompound attributes = value.getCompoundTagOrNull("attributes");
+
+            Number fog = effects.getNumberTagValueOrNull("fog_color");
+            if (fog == null || fog.intValue() == 0) {
+                if (attributes != null && attributes.getTagOrNull("minecraft:visual/fog_color") instanceof NBTNumber) {
+                    effects.setTag("fog_color", attributes.getTagOrNull("minecraft:visual/fog_color").copy());
+                } else {
                     int color = "minecraft:nether_wastes".equals(entryName.toString()) ? 0x330808
                             : "minecraft:the_end".equals(entryName.toString()) ? 0xA080A0 : 0xC0D8FF;
                     effects.setTag("fog_color", new NBTInt(color));
                 }
-                Number waterFog = effects.getNumberTagValueOrNull("water_fog_color");
-                if (waterFog == null || waterFog.intValue() == 0xFAFACD) {
+            }
+
+            Number waterFog = effects.getNumberTagValueOrNull("water_fog_color");
+            if (waterFog == null || waterFog.intValue() == 0) {
+                if (attributes != null && attributes.getTagOrNull("minecraft:visual/water_fog_color") instanceof NBTNumber) {
+                    effects.setTag("water_fog_color", attributes.getTagOrNull("minecraft:visual/water_fog_color").copy());
+                } else {
                     effects.setTag("water_fog_color", new NBTInt(0x050533));
                 }
             }
-            if (version.isNewerThanOrEquals(ClientVersion.V_1_21_4) && effects != null && effects.getTagOrNull("music") instanceof NBTCompound) {
+
+            Number water = effects.getNumberTagValueOrNull("water_color");
+            if (water == null || water.intValue() == 0) {
+                if (attributes != null && attributes.getTagOrNull("minecraft:visual/water_color") instanceof NBTNumber) {
+                    effects.setTag("water_color", attributes.getTagOrNull("minecraft:visual/water_color").copy());
+                } else {
+                    effects.setTag("water_color", new NBTInt(0x3F76E4));
+                }
+            }
+
+            if (version.isNewerThanOrEquals(ClientVersion.V_1_21_4) && effects.getTagOrNull("music") instanceof NBTCompound) {
                 NBTCompound oldMusic = (NBTCompound) effects.removeTag("music");
                 NBTCompound weighted = new NBTCompound();
                 weighted.setTag("data", oldMusic);
