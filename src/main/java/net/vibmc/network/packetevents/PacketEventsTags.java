@@ -34,10 +34,12 @@ public final class PacketEventsTags {
         registries.put(ResourceLocation.minecraft("block"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("item"), new ArrayList<>());
 
-        // Fluid tags populated from extra fluid mappings (fluids-26.1.nbt) if available
+        // Fluid tags populated from extra fluid mappings (fluids-26.1.nbt) for 26.1+ clients
         List<WrapperPlayServerTags.Tag> fluids = new ArrayList<>();
-        NBTCompound extraFluids = Registry.get().extraResource("fluids-26.1.nbt");
-        NBT valTag = extraFluids.getTagOrNull("fluids");
+        NBTCompound extraFluids = version.isNewerThanOrEquals(ClientVersion.V_26_1)
+                ? Registry.get().extraResource("fluids-26.1.nbt")
+                : null;
+        NBT valTag = extraFluids != null ? extraFluids.getTagOrNull("fluids") : null;
         if (valTag instanceof NBTIntArray) {
             int[] arr = ((NBTIntArray) valTag).getValue();
             List<Integer> waterIds = new ArrayList<>();

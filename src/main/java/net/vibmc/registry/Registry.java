@@ -35,11 +35,11 @@ public final class Registry {
         protocols.put("762", "1.19.4");
         protocols.put("763", "1.20");
         protocols.put("764", "1.20.2");
-        protocols.put("765", "1.20.3");
+        protocols.put("765", "1.20.2");
         protocols.put("766", "1.20.5");
-        protocols.put("767", "1.21");
-        protocols.put("768", "1.21.2");
-        protocols.put("769", "1.21.5");
+        protocols.put("767", "1.21.1");
+        protocols.put("768", "1.21.3");
+        protocols.put("769", "1.21.3");
         protocols.put("770", "1.21.9");
         protocols.put("771", "1.21.11");
         protocols.put("772", "26.1");
@@ -84,6 +84,7 @@ public final class Registry {
             for (String candidate : releaseName.split("/")) {
                 String trimmed = candidate.trim();
                 if (hasResource(trimmed)) return trimmed;
+                if (hasResource(trimmed + ".1")) return trimmed + ".1";
             }
         }
         String protocolRelease = releaseByProtocol.get(String.valueOf(clientVersion.getProtocolVersion()));
