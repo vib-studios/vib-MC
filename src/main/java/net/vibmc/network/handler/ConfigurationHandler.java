@@ -8,15 +8,15 @@ import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperCon
 import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerUpdateEnabledFeatures;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.ProtocolState;
-import net.vibmc.network.packetevents.PacketEventsTags;
 import net.vibmc.network.packetevents.WrapperConfigServerUpdateTags;
-import net.vibmc.registry.MinecraftDataRegistryCodec;
+import net.vibmc.registry.ViaMappingsRegistryCodec;
+import net.vibmc.registry.ViaMappingsTags;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.UUID;
 
-/** Configuration-stage handshake with registry data selected from the detected client version. */
+/** Configuration-stage handshake with registry data selected from ViaVersion Mappings via ViaNBT. */
 public final class ConfigurationHandler implements PacketHandler {
     private final String username;
     private final UUID uuid;
@@ -34,10 +34,8 @@ public final class ConfigurationHandler implements PacketHandler {
         connection.getUser().sendPacket(new WrapperConfigServerPluginMessage("minecraft:brand",brandData()));
         connection.getUser().sendPacket(new WrapperConfigServerUpdateEnabledFeatures(
                 Collections.singleton(ResourceLocation.minecraft("vanilla"))));
-        if(MinecraftDataRegistryCodec.usesSplitRegistries(version)){
+        if(ViaMappingsRegistryCodec.usesSplitRegistries(version)){
             waitingForKnownPacks=true;
-            // We do not omit any registry entries, so there is no need to negotiate a built-in
-            // pack. The response is still a required synchronization point in this format.
             connection.getUser().sendPacket(new com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerSelectKnownPacks(
                     Collections.emptyList()));
         }else sendRegistriesAndFinish(connection,version);
@@ -51,20 +49,19 @@ public final class ConfigurationHandler implements PacketHandler {
 
     private void sendRegistriesAndFinish(ServerPlayer connection,ClientVersion version){
         if(registriesSent)return;registriesSent=true;
-        if(MinecraftDataRegistryCodec.usesSplitRegistries(version)){
+        if(ViaMappingsRegistryCodec.usesSplitRegistries(version)){
             for(java.util.Map.Entry<ResourceLocation,java.util.List<WrapperConfigServerRegistryData.RegistryElement>> registry:
-                    MinecraftDataRegistryCodec.splitRegistries(version).entrySet()){
+                    ViaMappingsRegistryCodec.splitRegistries(version).entrySet()){
                 connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
                         registry.getKey(),registry.getValue()));
             }
         }else{
             connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
-                    MinecraftDataRegistryCodec.create(version)));
+                    ViaMappingsRegistryCodec.create(version)));
         }
-        connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(PacketEventsTags.tagMap(
-                version,MinecraftDataRegistryCodec.referencedTags(version),
-                MinecraftDataRegistryCodec.referencedTagsByRegistry(version))));
-        // PacketEvents changes the outbound state to PLAY while serializing this packet.
+        connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(ViaMappingsTags.tagMap(
+                version,ViaMappingsRegistryCodec.referencedTags(version),
+                ViaMappingsRegistryCodec.referencedTagsByRegistry(version))));
         connection.getUser().sendPacket(new WrapperConfigServerConfigurationEnd());
     }
 
@@ -80,7 +77,6 @@ public final class ConfigurationHandler implements PacketHandler {
 
     private static byte[] brandData(){
         byte[] text="vib-MC".getBytes(StandardCharsets.UTF_8);
-        byte[] data=new byte[text.length+1];data[0]=(byte)text.length;
-        System.arraycopy(text,0,data,1,text.length);return data;
+        byte[] data=new byte[text.length+1];data[0]=(byte)text.length;System.arraycopy(text,0,data,1,text.length);return data;
     }
 }

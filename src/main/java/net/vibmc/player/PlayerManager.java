@@ -431,7 +431,7 @@ public class PlayerManager {
         for (ServerPlayer player : players.values()) {
             if (player.getWorld() != world) continue;
             User user = player.getUser();
-            int stateId=net.vibmc.network.packetevents.PacketEventsStateMappings.id(
+            int stateId=net.vibmc.registry.ViaMappingsStateMapper.id(
                     state,user.getClientVersion());
             send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockChange(
                     new com.github.retrooper.packetevents.util.Vector3i(x,y,z),stateId));
@@ -533,9 +533,8 @@ public class PlayerManager {
     private void sendJoinPackets(ServerPlayer player) {
         User user = player.getUser();
         World world = player.getWorld();
-        // Resolve and cache this connection's immutable minecraft-data manifest. Individual
-        // registry files are parsed lazily when a protocol adapter requests them.
-        net.vibmc.registry.MinecraftDataRegistry.get().forClient(user.getClientVersion());
+        // Resolve and cache this connection's immutable ViaVersion Mappings manifest.
+        net.vibmc.registry.ViaMappingsRegistry.get().forClient(user.getClientVersion());
 
         sendLoginPlay(user, player);
         sendRegistryTags(user);
@@ -584,7 +583,7 @@ public class PlayerManager {
                 com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_13)
                 && user.getClientVersion().isOlderThan(
                 com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)) {
-            send(user,net.vibmc.network.packetevents.PacketEventsTags.create(user.getClientVersion()));
+            send(user,net.vibmc.registry.ViaMappingsTags.create(user.getClientVersion()));
         }
     }
 
@@ -700,6 +699,6 @@ public class PlayerManager {
             default:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD_PRE_1_18;
         }
     }
-    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.MinecraftDataRegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
+    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.ViaMappingsRegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
 
 }

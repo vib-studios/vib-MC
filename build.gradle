@@ -21,12 +21,14 @@ application {
 repositories {
     mavenCentral()
     maven { url = uri('https://repo.codemc.io/repository/maven-releases/') }
+    maven { url = uri('https://repo.viaversion.com') }
 }
 
 dependencies {
     implementation 'io.netty:netty-all:4.1.111.Final'
     implementation 'com.github.retrooper:packetevents-api:2.13.0'
     implementation 'com.github.retrooper:packetevents-netty-common:2.13.0'
+    implementation 'com.viaversion:nbt:5.1.2'
     implementation 'net.kyori:adventure-api:4.26.1'
     implementation 'net.kyori:adventure-nbt:4.26.1'
     implementation 'net.kyori:adventure-text-serializer-gson:4.26.1'
@@ -36,36 +38,6 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testImplementation 'org.junit.platform:junit-platform-launcher'
-}
-
-// Keep the full minecraft-data submodule available to developers, but only package the
-// Java-edition registry/configuration snapshots used by the runtime loader.
-def minecraftDataRoot = file('src/main/resources/vendored/minecraft-data')
-sourceSets.main.resources.exclude 'vendored/minecraft-data/**'
-processResources {
-    from(minecraftDataRoot) {
-        into 'vendored/minecraft-data'
-        include 'data/dataPaths.json'
-        include 'data/pc/common/protocolVersions.json'
-        include 'data/pc/common/versions.json'
-        include 'data/pc/*/version.json'
-        include 'data/pc/*/loginPacket.json'
-    }
-}
-
-tasks.register('verifyMinecraftDataResources') {
-    dependsOn tasks.named('processResources')
-    doLast {
-        def root = layout.buildDirectory.dir('resources/main/vendored/minecraft-data').get().asFile
-        fileTree(root).files.each { file ->
-            def path = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-            def allowed = path == 'data/dataPaths.json' ||
-                    path == 'data/pc/common/protocolVersions.json' ||
-                    path == 'data/pc/common/versions.json' ||
-                    path.matches('data/pc/[^/]+/(version|loginPacket)\\.json')
-            if (!allowed) throw new GradleException("Unexpected bundled minecraft-data resource: ${path}")
-        }
-    }
 }
 
 test {
@@ -102,7 +74,6 @@ shadowJar {
 }
 
 build.dependsOn shadowJar
-tasks.named('check') { dependsOn tasks.named('verifyMinecraftDataResources') }
 
 tasks.named('startScripts') {
     dependsOn shadowJar

@@ -183,7 +183,7 @@ World chunks store PacketEvents `WrappedBlockState` objects directly, and invent
 
 A `ServerPlayer` is created immediately for every PacketEvents `User`. Its world, UUID, username, and other not-yet-known login state remain nullable until authentication completes; `isInWorld()` distinguishes active gameplay players. Packet wrappers are created at call sites and sent directly with `User.sendPacket(...)`; there is no pending-connection class, packet facade, or parallel protocol implementation.
 
-Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers. The vendored PrismarineJS minecraft-data snapshots are used only for Java-edition registry/configuration payloads such as the modern Join Game dimension codec. `tools/update-minecraft-data.sh` creates a sparse checkout containing only the required PC `version.json` and `loginPacket.json` snapshots plus their indexes, and Gradle verifies that no unrelated datasets enter the runnable JAR.
+Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers. ViaNBT and ViaVersion Mappings snapshots are used for Java-edition registry/configuration payloads such as modern Join Game dimension codecs and tags.
 
 ## Movement policy
 

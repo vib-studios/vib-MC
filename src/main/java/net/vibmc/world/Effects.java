@@ -35,7 +35,7 @@ public final class Effects {
         Vector3i position = new Vector3i(x, y, z);
         server.getPlayerManager().broadcastNear(world, x + 0.5, y + 0.5, z + 0.5, 48.0, player ->
                 new WrapperPlayServerEffect(EFFECT_BLOCK_BREAK, position,
-                        net.vibmc.network.packetevents.PacketEventsStateMappings.id(
+                        net.vibmc.registry.ViaMappingsStateMapper.id(
                                 broken, player.getUser().getClientVersion()), false));
     }
 

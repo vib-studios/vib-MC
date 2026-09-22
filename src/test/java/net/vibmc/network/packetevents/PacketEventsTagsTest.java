@@ -48,8 +48,8 @@ class PacketEventsTagsTest {
     void oneTwentyOneElevenBindsDynamicRegistryLocalTags(){
         ClientVersion version=ClientVersion.V_1_21_11;
         Map<ResourceLocation,List<WrapperPlayServerTags.Tag>> registries=PacketEventsTags.tagMap(
-                version,net.vibmc.registry.MinecraftDataRegistryCodec.referencedTags(version),
-                net.vibmc.registry.MinecraftDataRegistryCodec.referencedTagsByRegistry(version));
+                version,net.vibmc.registry.ViaMappingsRegistryCodec.referencedTags(version),
+                net.vibmc.registry.ViaMappingsRegistryCodec.referencedTagsByRegistry(version));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:dialog")),
                 "minecraft:pause_screen_additions"));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:dialog")),
@@ -66,8 +66,8 @@ class PacketEventsTagsTest {
     void twentySixOneBindsRequiredFireDamageTypeTag(){
         ClientVersion version=ClientVersion.V_26_1;
         Map<ResourceLocation,List<WrapperPlayServerTags.Tag>> registries=PacketEventsTags.tagMap(
-                version,net.vibmc.registry.MinecraftDataRegistryCodec.referencedTags(version),
-                net.vibmc.registry.MinecraftDataRegistryCodec.referencedTagsByRegistry(version));
+                version,net.vibmc.registry.ViaMappingsRegistryCodec.referencedTags(version),
+                net.vibmc.registry.ViaMappingsRegistryCodec.referencedTagsByRegistry(version));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:damage_type")),
                 "minecraft:is_fire"));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:damage_type")),

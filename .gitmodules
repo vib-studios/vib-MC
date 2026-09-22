@@ -1,4 +1,0 @@
-[submodule "src/main/resources/vendored/minecraft-data"]
-	path = src/main/resources/vendored/minecraft-data
-	url = https://github.com/PrismarineJS/minecraft-data.git
-	shallow = true
