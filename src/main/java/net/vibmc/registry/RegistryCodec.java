@@ -8,7 +8,7 @@ import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperCon
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Version-selected Configuration registry data loaded directly into PacketEvents NBT from ViaVersion Mappings. */
+/** Version-selected Configuration registry data loaded from ViaVersion Mappings NBT assets. */
 public final class RegistryCodec {
     private static final Map<String, RegistryData> CACHE = new ConcurrentHashMap<>();
 
@@ -113,6 +113,10 @@ public final class RegistryCodec {
                 overlayPacketEventsRegistries(registries, version);
             }
 
+            if (version.isNewerThanOrEquals(ClientVersion.V_1_21)) {
+                overlayExtraEnchantments(registries, version);
+            }
+
             for (Map.Entry<ResourceLocation, List<WrapperConfigServerRegistryData.RegistryElement>> reg : registries.entrySet()) {
                 for (WrapperConfigServerRegistryData.RegistryElement entry : reg.getValue()) {
                     normalizePacketEventsEntry(reg.getKey().toString(), entry.getId(), entry.getData(), version);
@@ -121,6 +125,35 @@ public final class RegistryCodec {
 
             return new RegistryData(release, null, Collections.unmodifiableMap(registries),
                     Collections.unmodifiableSet(referencedTags), Collections.unmodifiableMap(tagsByRegistry));
+        }
+    }
+
+    private static void overlayExtraEnchantments(
+            Map<ResourceLocation, List<WrapperConfigServerRegistryData.RegistryElement>> registries,
+            ClientVersion version) {
+        NBTCompound extra = Registry.get().extraResource("enchantments-1.21.nbt");
+        if (extra == null) return;
+        NBTCompound entriesComp = extra.getCompoundTagOrNull("entries");
+        if (entriesComp == null) return;
+
+        ResourceLocation regKey = new ResourceLocation("minecraft:enchantment");
+        List<WrapperConfigServerRegistryData.RegistryElement> existing = registries.computeIfAbsent(regKey, k -> new ArrayList<>());
+
+        for (Map.Entry<String, NBT> entry : entriesComp.getTags().entrySet()) {
+            ResourceLocation enchId = new ResourceLocation(entry.getKey());
+            NBT enchData = entry.getValue().copy();
+            normalizePacketEventsEntry("minecraft:enchantment", enchId, enchData, version);
+            boolean replaced = false;
+            for (int i = 0; i < existing.size(); i++) {
+                if (existing.get(i).getId().equals(enchId)) {
+                    existing.set(i, new WrapperConfigServerRegistryData.RegistryElement(enchId, enchData));
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                existing.add(new WrapperConfigServerRegistryData.RegistryElement(enchId, enchData));
+            }
         }
     }
 

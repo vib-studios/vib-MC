@@ -33,9 +33,26 @@ public final class PacketEventsTags {
         Map<ResourceLocation, List<WrapperPlayServerTags.Tag>> registries = new LinkedHashMap<>();
         registries.put(ResourceLocation.minecraft("block"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("item"), new ArrayList<>());
-        registries.put(ResourceLocation.minecraft("fluid"), new ArrayList<>(Arrays.asList(
-                new WrapperPlayServerTags.Tag("minecraft:water", Arrays.asList(1, 2)),
-                new WrapperPlayServerTags.Tag("minecraft:lava", Arrays.asList(3, 4)))));
+
+        // Fluid tags populated from extra fluid mappings (fluids-26.1.nbt) if available
+        List<WrapperPlayServerTags.Tag> fluids = new ArrayList<>();
+        NBTCompound extraFluids = Registry.get().extraResource("fluids-26.1.nbt");
+        NBT valTag = extraFluids.getTagOrNull("fluids");
+        if (valTag instanceof NBTIntArray) {
+            int[] arr = ((NBTIntArray) valTag).getValue();
+            List<Integer> waterIds = new ArrayList<>();
+            List<Integer> lavaIds = new ArrayList<>();
+            for (int i = 0; i < arr.length; i++) {
+                if (i < 52) waterIds.add(arr[i]);
+                else lavaIds.add(arr[i]);
+            }
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:water", waterIds.isEmpty() ? Arrays.asList(1, 2) : waterIds));
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:lava", lavaIds.isEmpty() ? Arrays.asList(3, 4) : lavaIds));
+        } else {
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:water", Arrays.asList(1, 2)));
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:lava", Arrays.asList(3, 4)));
+        }
+        registries.put(ResourceLocation.minecraft("fluid"), fluids);
         registries.put(ResourceLocation.minecraft("entity_type"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("game_event"), new ArrayList<>());
 
@@ -54,11 +71,11 @@ public final class PacketEventsTags {
                                 NBTCompound tagEntry = (NBTCompound) itemObj;
                                 String tagName = tagEntry.getStringTagValueOrDefault("name", "");
                                 List<Integer> tagValues = new ArrayList<>();
-                                NBT valTag = tagEntry.getTagOrNull("values");
-                                if (valTag instanceof NBTIntArray) {
-                                    for (int v : ((NBTIntArray) valTag).getValue()) tagValues.add(v);
-                                } else if (valTag instanceof NBTList) {
-                                    for (Object v : ((NBTList<?>) valTag).getTags()) {
+                                NBT tagVal = tagEntry.getTagOrNull("values");
+                                if (tagVal instanceof NBTIntArray) {
+                                    for (int v : ((NBTIntArray) tagVal).getValue()) tagValues.add(v);
+                                } else if (tagVal instanceof NBTList) {
+                                    for (Object v : ((NBTList<?>) tagVal).getTags()) {
                                         if (v instanceof NBTInt) tagValues.add(((NBTInt) v).getValue());
                                     }
                                 }
