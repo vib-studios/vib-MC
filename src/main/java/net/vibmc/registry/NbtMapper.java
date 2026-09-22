@@ -9,8 +9,8 @@ import com.viaversion.nbt.tag.compound.CompoundTag;
 import java.util.Map;
 
 /** Converts ViaNBT tags (com.viaversion.nbt) into PacketEvents NBT objects and vice-versa. */
-public final class ViaNbtMapper {
-    private ViaNbtMapper() {}
+public final class NbtMapper {
+    private NbtMapper() {}
 
     public static NBT toPacketEvents(Tag tag) {
         if (tag == null) return null;

@@ -5,7 +5,6 @@ import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.resources.ResourceLocation;
 import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerRegistryData;
 import com.viaversion.nbt.tag.Tag;
-import com.viaversion.nbt.tag.basic.StringTag;
 import com.viaversion.nbt.tag.collection.ListTag;
 import com.viaversion.nbt.tag.compound.CompoundTag;
 
@@ -13,10 +12,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Version-selected Configuration registry data loaded from ViaVersion Mappings via ViaNBT. */
-public final class ViaMappingsRegistryCodec {
+public final class RegistryCodec {
     private static final Map<String, RegistryData> CACHE = new ConcurrentHashMap<>();
 
-    private ViaMappingsRegistryCodec() {}
+    private RegistryCodec() {}
 
     /** Legacy single-compound registry payload used through the 1.20.3 protocol family. */
     public static NBTCompound create(ClientVersion version) {
@@ -61,8 +60,8 @@ public final class ViaMappingsRegistryCodec {
         if (version.isOlderThan(ClientVersion.V_1_16_2)) {
             return new RegistryData("legacy", new NBTCompound(), null, Collections.emptySet(), Collections.emptyMap());
         }
-        CompoundTag mappingsTag = ViaMappingsRegistry.get().forClient(version);
-        String release = ViaMappingsRegistry.get().selectRelease(version);
+        CompoundTag mappingsTag = Registry.get().forClient(version);
+        String release = Registry.get().selectRelease(version);
         return CACHE.computeIfAbsent(release, ignored -> load(mappingsTag, release, version));
     }
 
@@ -74,7 +73,7 @@ public final class ViaMappingsRegistryCodec {
         if ("compound".equals(codecType)) {
             CompoundTag codecVia = root.getCompoundTag("dimensionCodec");
             if (codecVia == null) codecVia = new CompoundTag();
-            NBTCompound legacy = ViaNbtMapper.toPacketEventsCompound(codecVia);
+            NBTCompound legacy = NbtMapper.toPacketEventsCompound(codecVia);
             collectTagReferences(legacy, referencedTags);
             forceClassicHeight(legacy);
             return new RegistryData(release, legacy, null, Collections.unmodifiableSet(referencedTags), Collections.emptyMap());
@@ -95,7 +94,7 @@ public final class ViaMappingsRegistryCodec {
                                 CompoundTag elemTag = (CompoundTag) item;
                                 String key = elemTag.getString("key", "");
                                 Tag valVia = elemTag.get("value");
-                                NBT valPE = ViaNbtMapper.toPacketEvents(valVia);
+                                NBT valPE = NbtMapper.toPacketEvents(valVia);
 
                                 if ("minecraft:dimension_type".equals(registryKey.toString()) && valPE instanceof NBTCompound) {
                                     forceClassicDimension((NBTCompound) valPE);

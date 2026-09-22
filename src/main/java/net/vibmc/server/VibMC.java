@@ -70,7 +70,7 @@ public final class VibMC {
             if (config.useLegacyProxyForwarding() && !config.onlineMode()) {
                 throw new IOException("proxy-mode=legacy requires online-mode=true");
             }
-            net.vibmc.registry.ViaMappingsRegistry.initialize();
+            net.vibmc.registry.Registry.initialize();
             net.vibmc.network.packetevents.PacketEventsRuntime.initialize();
             new VibMC(config).start();
         } catch (IOException e) {

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ViaNbtMapperTest {
+class NbtMapperTest {
     @Test
     void roundTripCompoundTag() {
         CompoundTag viaComp = new CompoundTag();
@@ -26,7 +26,7 @@ class ViaNbtMapperTest {
         list.add(new StringTag("b"));
         viaComp.put("list", list);
 
-        NBTCompound peComp = ViaNbtMapper.toPacketEventsCompound(viaComp);
+        NBTCompound peComp = NbtMapper.toPacketEventsCompound(viaComp);
         assertNotNull(peComp);
         assertEquals("hello", peComp.getStringTagValueOrNull("str"));
         assertEquals(42, peComp.getNumberTagValueOrNull("int").intValue());
@@ -35,7 +35,7 @@ class ViaNbtMapperTest {
         assertEquals(2.718, peComp.getNumberTagValueOrNull("double").doubleValue(), 0.001);
         assertEquals(100L, peComp.getNumberTagValueOrNull("long").longValue());
 
-        CompoundTag viaBack = (CompoundTag) ViaNbtMapper.fromPacketEvents(peComp);
+        CompoundTag viaBack = (CompoundTag) NbtMapper.fromPacketEvents(peComp);
         assertNotNull(viaBack);
         assertEquals("hello", viaBack.getString("str"));
         assertEquals(42, viaBack.getInt("int"));

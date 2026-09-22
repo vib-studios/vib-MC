@@ -12,10 +12,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ViaMappingsRegistryCodecTest {
+class RegistryCodecTest {
     @Test
     void oneSixteenTwoCodecContainsClassicDimensionsAndBiomes() {
-        NBTCompound codec = ViaMappingsRegistryCodec.create(ClientVersion.V_1_16_2);
+        NBTCompound codec = RegistryCodec.create(ClientVersion.V_1_16_2);
         NBTCompound dimensions = codec.getCompoundTagOrThrow("minecraft:dimension_type");
         NBTList<NBTCompound> values = dimensions.getCompoundListTagOrThrow("value");
         assertTrue(values.size() >= 3);
@@ -39,7 +39,7 @@ class ViaMappingsRegistryCodecTest {
         }
         assertTrue(foundPlains);
 
-        NBTCompound modernOverworld = ViaMappingsRegistryCodec.create(ClientVersion.V_1_17)
+        NBTCompound modernOverworld = RegistryCodec.create(ClientVersion.V_1_17)
                 .getCompoundTagOrThrow("minecraft:dimension_type")
                 .getCompoundListTagOrThrow("value").getTag(0).getCompoundTagOrThrow("element");
         assertEquals(0, modernOverworld.getNumberTagValueOrThrow("min_y").intValue());
@@ -48,7 +48,7 @@ class ViaMappingsRegistryCodecTest {
 
     @Test
     void oneNineteenCodecContainsChatTypes() {
-        NBTCompound codec = ViaMappingsRegistryCodec.create(ClientVersion.V_1_19);
+        NBTCompound codec = RegistryCodec.create(ClientVersion.V_1_19);
         NBTList<NBTCompound> values = codec.getCompoundTagOrThrow("minecraft:chat_type")
                 .getCompoundListTagOrThrow("value");
         assertTrue(values.size() > 0);
@@ -60,7 +60,7 @@ class ViaMappingsRegistryCodecTest {
 
     @Test
     void oneNineteenFourCodecContainsDamageTypes() {
-        NBTCompound codec = ViaMappingsRegistryCodec.create(ClientVersion.V_1_19_4);
+        NBTCompound codec = RegistryCodec.create(ClientVersion.V_1_19_4);
         assertTrue(codec.getCompoundTagOrThrow("minecraft:damage_type")
                 .getCompoundListTagOrThrow("value").size() > 0);
     }
@@ -68,7 +68,7 @@ class ViaMappingsRegistryCodecTest {
     @Test
     void configurationCodecsKeepClassicHeight() {
         for (ClientVersion version : new ClientVersion[]{ClientVersion.V_1_20_2, ClientVersion.V_1_20_3}) {
-            NBTCompound codec = ViaMappingsRegistryCodec.create(version);
+            NBTCompound codec = RegistryCodec.create(version);
             assertFalse(codec.isEmpty(), version.toString());
             NBTList<NBTCompound> dimensions = codec.getCompoundTagOrThrow("minecraft:dimension_type")
                     .getCompoundListTagOrThrow("value");
@@ -84,18 +84,18 @@ class ViaMappingsRegistryCodecTest {
 
     @Test
     void oneTwentyOneRegistrySupportsSplitRegistries() {
-        assertTrue(ViaMappingsRegistryCodec.usesSplitRegistries(ClientVersion.V_1_21));
-        assertTrue(ViaMappingsRegistryCodec.splitRegistries(ClientVersion.V_1_21)
+        assertTrue(RegistryCodec.usesSplitRegistries(ClientVersion.V_1_21));
+        assertTrue(RegistryCodec.splitRegistries(ClientVersion.V_1_21)
                 .containsKey(new ResourceLocation("minecraft:dimension_type")));
-        assertTrue(ViaMappingsRegistryCodec.referencedTags(ClientVersion.V_1_21_2)
+        assertTrue(RegistryCodec.referencedTags(ClientVersion.V_1_21_2)
                 .contains(new ResourceLocation("minecraft:enchantable/head_armor")));
     }
 
     @Test
     void oneTwentyFiveUsesSplitRegistriesFromViaMappings() {
-        assertTrue(ViaMappingsRegistryCodec.usesSplitRegistries(ClientVersion.V_1_20_5));
+        assertTrue(RegistryCodec.usesSplitRegistries(ClientVersion.V_1_20_5));
         Map<ResourceLocation, List<WrapperConfigServerRegistryData.RegistryElement>> registries =
-                ViaMappingsRegistryCodec.splitRegistries(ClientVersion.V_1_20_5);
+                RegistryCodec.splitRegistries(ClientVersion.V_1_20_5);
         List<WrapperConfigServerRegistryData.RegistryElement> dimensions =
                 registries.get(new ResourceLocation("minecraft:dimension_type"));
         assertNotNull(dimensions);
@@ -113,7 +113,7 @@ class ViaMappingsRegistryCodecTest {
     @Test
     void oneTwentyOneFiveNormalizesPacketEventsAndFallbackRegistrySchemas() {
         Map<ResourceLocation, List<WrapperConfigServerRegistryData.RegistryElement>> registries =
-                ViaMappingsRegistryCodec.splitRegistries(ClientVersion.V_1_21_5);
+                RegistryCodec.splitRegistries(ClientVersion.V_1_21_5);
         ResourceLocation biomeKey = new ResourceLocation("minecraft:worldgen/biome");
         NBTCompound badlands = null;
         for (WrapperConfigServerRegistryData.RegistryElement entry : registries.get(biomeKey)) {
@@ -133,7 +133,7 @@ class ViaMappingsRegistryCodecTest {
     @Test
     void oneTwentyOneNineUsesRenamedItemDamageEnchantmentEffect() {
         List<WrapperConfigServerRegistryData.RegistryElement> enchantments =
-                ViaMappingsRegistryCodec.splitRegistries(ClientVersion.V_1_21_9).get(
+                RegistryCodec.splitRegistries(ClientVersion.V_1_21_9).get(
                         new ResourceLocation("minecraft:enchantment"));
         assertNotNull(enchantments);
         assertFalse(enchantments.isEmpty());
@@ -146,7 +146,7 @@ class ViaMappingsRegistryCodecTest {
         assertTrue(containsString(soulSpeed, "minecraft:change_item_damage"));
 
         List<WrapperConfigServerRegistryData.RegistryElement> damageTypes =
-                ViaMappingsRegistryCodec.splitRegistries(ClientVersion.V_1_21_9).get(
+                RegistryCodec.splitRegistries(ClientVersion.V_1_21_9).get(
                         new ResourceLocation("minecraft:damage_type"));
         assertNotNull(damageTypes);
         boolean enderPearl = false;
@@ -174,6 +174,6 @@ class ViaMappingsRegistryCodecTest {
 
     @Test
     void legacyVersionsDoNotReceiveModernCodec() {
-        assertTrue(ViaMappingsRegistryCodec.create(ClientVersion.V_1_12_2).isEmpty());
+        assertTrue(RegistryCodec.create(ClientVersion.V_1_12_2).isEmpty());
     }
 }

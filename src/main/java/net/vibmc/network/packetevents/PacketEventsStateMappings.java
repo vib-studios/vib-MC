@@ -6,7 +6,7 @@ import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateValue;
 import com.viaversion.nbt.tag.collection.IntArrayTag;
 import com.viaversion.nbt.tag.compound.CompoundTag;
-import net.vibmc.registry.ViaMappingsRegistry;
+import net.vibmc.registry.Registry;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,7 +33,7 @@ public final class PacketEventsStateMappings {
     @SuppressWarnings("deprecation")
     private static int map(WrappedBlockState source, ClientVersion version) {
         try {
-            CompoundTag mappingsTag = ViaMappingsRegistry.get().forClient(version);
+            CompoundTag mappingsTag = Registry.get().forClient(version);
             IntArrayTag stateMap = mappingsTag.getIntArrayTag("blockstates");
             if (stateMap != null && stateMap.getValue() != null) {
                 int[] arr = stateMap.getValue();

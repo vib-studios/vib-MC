@@ -6,7 +6,7 @@ import org.junit.platform.launcher.TestPlan;
 
 public final class PacketEventsTestBootstrap implements TestExecutionListener {
     @Override public void testPlanExecutionStarted(TestPlan testPlan){
-        try{net.vibmc.registry.ViaMappingsRegistry.initialize();}
+        try{net.vibmc.registry.Registry.initialize();}
         catch(java.io.IOException error){throw new IllegalStateException(error);}
         PacketEventsRuntime.initialize();
     }

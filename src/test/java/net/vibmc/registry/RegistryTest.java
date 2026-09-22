@@ -7,30 +7,30 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ViaMappingsRegistryTest {
+class RegistryTest {
     @BeforeAll
     static void initialize() throws Exception {
-        ViaMappingsRegistry.initialize();
+        Registry.initialize();
     }
 
     @Test
     void resolvesAndLoadsViaVersionMappingsNbtSnapshots() {
-        CompoundTag canonical = ViaMappingsRegistry.get().forClient(ClientVersion.V_1_12_2);
+        CompoundTag canonical = Registry.get().forClient(ClientVersion.V_1_12_2);
         assertNotNull(canonical);
 
-        CompoundTag modern = ViaMappingsRegistry.get().forClient(ClientVersion.V_1_19_4);
+        CompoundTag modern = Registry.get().forClient(ClientVersion.V_1_19_4);
         assertNotNull(modern);
         assertEquals("1.19.4", modern.getString("release"));
 
-        CompoundTag split = ViaMappingsRegistry.get().forClient(ClientVersion.V_1_20_5);
+        CompoundTag split = Registry.get().forClient(ClientVersion.V_1_20_5);
         assertNotNull(split);
         assertEquals("split", split.getString("codecType"));
     }
 
     @Test
     void mappingsNbtIsParsedAndCached() {
-        CompoundTag tag1 = ViaMappingsRegistry.get().forClient(ClientVersion.V_1_20);
-        CompoundTag tag2 = ViaMappingsRegistry.get().forClient(ClientVersion.V_1_20);
+        CompoundTag tag1 = Registry.get().forClient(ClientVersion.V_1_20);
+        CompoundTag tag2 = Registry.get().forClient(ClientVersion.V_1_20);
         assertSame(tag1, tag2);
     }
 }

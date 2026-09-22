@@ -534,7 +534,7 @@ public class PlayerManager {
         User user = player.getUser();
         World world = player.getWorld();
         // Resolve and cache this connection's immutable ViaVersion Mappings manifest.
-        net.vibmc.registry.ViaMappingsRegistry.get().forClient(user.getClientVersion());
+        net.vibmc.registry.Registry.get().forClient(user.getClientVersion());
 
         sendLoginPlay(user, player);
         sendRegistryTags(user);
@@ -699,6 +699,6 @@ public class PlayerManager {
             default:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD_PRE_1_18;
         }
     }
-    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.ViaMappingsRegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
+    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.RegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
 
 }

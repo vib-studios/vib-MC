@@ -11,15 +11,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Loads ViaVersion Mappings NBT snapshots from classpath resources using ViaNBT. */
-public final class ViaMappingsRegistry {
+/** Central Registry loader that loads ViaVersion Mappings NBT snapshots using ViaNBT. */
+public final class Registry {
     private static final String ROOT = "/mappings/";
-    private static volatile ViaMappingsRegistry instance;
+    private static volatile Registry instance;
 
     private final Map<String, String> releaseByProtocol;
     private final Map<String, CompoundTag> cache = new ConcurrentHashMap<>();
 
-    private ViaMappingsRegistry(Map<String, String> releaseByProtocol) {
+    private Registry(Map<String, String> releaseByProtocol) {
         this.releaseByProtocol = releaseByProtocol;
     }
 
@@ -41,24 +41,24 @@ public final class ViaMappingsRegistry {
         protocols.put("770", "1.21.9");
         protocols.put("771", "1.21.11");
         protocols.put("772", "26.1");
-        instance = new ViaMappingsRegistry(Collections.unmodifiableMap(protocols));
+        instance = new Registry(Collections.unmodifiableMap(protocols));
     }
 
-    public static ViaMappingsRegistry get() {
-        ViaMappingsRegistry loaded = instance;
+    public static Registry get() {
+        Registry loaded = instance;
         if (loaded == null) {
             try {
                 initialize();
                 loaded = instance;
             } catch (IOException e) {
-                throw new IllegalStateException("Failed to initialize ViaMappingsRegistry", e);
+                throw new IllegalStateException("Failed to initialize Registry", e);
             }
         }
         return loaded;
     }
 
     public CompoundTag forClient(ClientVersion clientVersion) {
-        if (clientVersion == null) throw new IllegalArgumentException("clientVersion");
+        if (clientVersion == null) throw new IllegalArgumentException("clientVersion cannot be null");
         String release = selectRelease(clientVersion);
         return cache.computeIfAbsent(release, this::loadMappingsNbt);
     }
@@ -77,12 +77,12 @@ public final class ViaMappingsRegistry {
     }
 
     private boolean hasResource(String release) {
-        return ViaMappingsRegistry.class.getResource(ROOT + "mapping-" + release + ".nbt") != null;
+        return Registry.class.getResource(ROOT + "mapping-" + release + ".nbt") != null;
     }
 
     private CompoundTag loadMappingsNbt(String release) {
         String path = ROOT + "mapping-" + release + ".nbt";
-        InputStream stream = ViaMappingsRegistry.class.getResourceAsStream(path);
+        InputStream stream = Registry.class.getResourceAsStream(path);
         if (stream == null) {
             throw new IllegalArgumentException("Missing ViaVersion Mappings NBT resource for " + release + ": " + path);
         }

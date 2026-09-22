@@ -8,9 +8,9 @@ import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperCon
 import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerUpdateEnabledFeatures;
 import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.ProtocolState;
-import net.vibmc.network.packetevents.WrapperConfigServerUpdateTags;
-import net.vibmc.registry.ViaMappingsRegistryCodec;
 import net.vibmc.network.packetevents.PacketEventsTags;
+import net.vibmc.network.packetevents.WrapperConfigServerUpdateTags;
+import net.vibmc.registry.RegistryCodec;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -34,7 +34,7 @@ public final class ConfigurationHandler implements PacketHandler {
         connection.getUser().sendPacket(new WrapperConfigServerPluginMessage("minecraft:brand",brandData()));
         connection.getUser().sendPacket(new WrapperConfigServerUpdateEnabledFeatures(
                 Collections.singleton(ResourceLocation.minecraft("vanilla"))));
-        if(ViaMappingsRegistryCodec.usesSplitRegistries(version)){
+        if(RegistryCodec.usesSplitRegistries(version)){
             waitingForKnownPacks=true;
             connection.getUser().sendPacket(new com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerSelectKnownPacks(
                     Collections.emptyList()));
@@ -49,19 +49,19 @@ public final class ConfigurationHandler implements PacketHandler {
 
     private void sendRegistriesAndFinish(ServerPlayer connection,ClientVersion version){
         if(registriesSent)return;registriesSent=true;
-        if(ViaMappingsRegistryCodec.usesSplitRegistries(version)){
+        if(RegistryCodec.usesSplitRegistries(version)){
             for(java.util.Map.Entry<ResourceLocation,java.util.List<WrapperConfigServerRegistryData.RegistryElement>> registry:
-                    ViaMappingsRegistryCodec.splitRegistries(version).entrySet()){
+                    RegistryCodec.splitRegistries(version).entrySet()){
                 connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
                         registry.getKey(),registry.getValue()));
             }
         }else{
             connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
-                    ViaMappingsRegistryCodec.create(version)));
+                    RegistryCodec.create(version)));
         }
         connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(PacketEventsTags.tagMap(
-                version,ViaMappingsRegistryCodec.referencedTags(version),
-                ViaMappingsRegistryCodec.referencedTagsByRegistry(version))));
+                version,RegistryCodec.referencedTags(version),
+                RegistryCodec.referencedTagsByRegistry(version))));
         connection.getUser().sendPacket(new WrapperConfigServerConfigurationEnd());
     }
 

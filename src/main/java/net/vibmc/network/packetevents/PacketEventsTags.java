@@ -10,7 +10,7 @@ import com.viaversion.nbt.tag.basic.IntTag;
 import com.viaversion.nbt.tag.collection.IntArrayTag;
 import com.viaversion.nbt.tag.collection.ListTag;
 import com.viaversion.nbt.tag.compound.CompoundTag;
-import net.vibmc.registry.ViaMappingsRegistry;
+import net.vibmc.registry.Registry;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -45,7 +45,7 @@ public final class PacketEventsTags {
 
         // Load ViaVersion Mappings tags via ViaNBT
         try {
-            CompoundTag mappingsRoot = ViaMappingsRegistry.get().forClient(version);
+            CompoundTag mappingsRoot = Registry.get().forClient(version);
             CompoundTag tagsComp = mappingsRoot.getCompoundTag("tags");
             if (tagsComp != null) {
                 for (Map.Entry<String, Tag> entry : tagsComp.entrySet()) {
