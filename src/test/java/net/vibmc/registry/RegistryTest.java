@@ -28,10 +28,10 @@ class RegistryTest {
     }
 
     @Test
-    void twentySixTwoResolvesToTwentySixOneMappings() {
+    void twentySixTwoLoadsTwentySixTwoMappings() {
         NBTCompound tag262 = Registry.get().forClient(ClientVersion.V_26_2);
         assertNotNull(tag262);
-        assertEquals("26.1", tag262.getStringTagValueOrNull("release"));
+        assertEquals("26.2", tag262.getStringTagValueOrNull("release"));
         assertEquals("split", tag262.getStringTagValueOrNull("codecType"));
     }
 

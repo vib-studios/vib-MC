@@ -43,8 +43,7 @@ public final class Registry {
         protocols.put("770", "1.21.9");
         protocols.put("771", "1.21.11");
         protocols.put("772", "26.1");
-        protocols.put("773", "26.1");
-        protocols.put("774", "26.1");
+        protocols.put("773", "26.2");
         instance = new Registry(Collections.unmodifiableMap(protocols));
     }
 
@@ -87,12 +86,10 @@ public final class Registry {
                 String trimmed = candidate.trim();
                 if (hasResource(trimmed)) return trimmed;
                 if (hasResource(trimmed + ".1")) return trimmed + ".1";
-                if ((trimmed.startsWith("26.") || trimmed.equals("26")) && hasResource("26.1")) return "26.1";
             }
         }
         String protocolRelease = releaseByProtocol.get(String.valueOf(clientVersion.getProtocolVersion()));
         if (protocolRelease != null && hasResource(protocolRelease)) return protocolRelease;
-        if (clientVersion.isNewerThanOrEquals(ClientVersion.V_26_1)) return "26.1";
         return "1.20.5";
     }
 
