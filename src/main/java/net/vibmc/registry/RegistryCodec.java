@@ -229,11 +229,8 @@ public final class RegistryCodec {
         if (!(encoded instanceof NBTCompound)) return;
         NBTCompound value = (NBTCompound) encoded;
 
-        if ("minecraft:enchantment".equals(registryName) && version.isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
-            rewriteRenamedEnchantmentEffects(value);
-        }
-
         if ("minecraft:worldgen/biome".equals(registryName)) {
+            convertHexColorsToInts(value);
             NBTCompound effects = value.getCompoundTagOrNull("effects");
             if (effects != null && version.isOlderThan(ClientVersion.V_1_21_11)) {
                 Number fog = effects.getNumberTagValueOrNull("fog_color");
@@ -258,6 +255,10 @@ public final class RegistryCodec {
             }
         }
 
+        if ("minecraft:enchantment".equals(registryName) && version.isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
+            rewriteRenamedEnchantmentEffects(value);
+        }
+
         if ("minecraft:wolf_variant".equals(registryName) && version.isNewerThanOrEquals(ClientVersion.V_1_21_5) && value.getCompoundTagOrNull("assets") == null) {
             NBT wild = value.removeTag("wild_texture"), tame = value.removeTag("tame_texture"), angry = value.removeTag("angry_texture");
             if (wild != null && tame != null && angry != null) {
@@ -267,6 +268,43 @@ public final class RegistryCodec {
                 assets.setTag("angry", angry);
                 value.setTag("assets", assets);
                 value.removeTag("biomes");
+            }
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void convertHexColorsToInts(NBT tag) {
+        if (tag instanceof NBTCompound) {
+            NBTCompound compound = (NBTCompound) tag;
+            for (Map.Entry<String, NBT> entry : new ArrayList<>(compound.getTags().entrySet())) {
+                NBT child = entry.getValue();
+                if (child instanceof NBTString) {
+                    String str = ((NBTString) child).getValue();
+                    if (str.startsWith("#") && str.length() == 7) {
+                        try {
+                            int color = Integer.parseInt(str.substring(1), 16);
+                            compound.setTag(entry.getKey(), new NBTInt(color));
+                        } catch (NumberFormatException ignored) {}
+                    }
+                } else {
+                    convertHexColorsToInts(child);
+                }
+            }
+        } else if (tag instanceof NBTList) {
+            NBTList list = (NBTList) tag;
+            for (int i = 0; i < list.size(); i++) {
+                NBT child = list.getTag(i);
+                if (child instanceof NBTString) {
+                    String str = ((NBTString) child).getValue();
+                    if (str.startsWith("#") && str.length() == 7) {
+                        try {
+                            int color = Integer.parseInt(str.substring(1), 16);
+                            list.setTag(i, new NBTInt(color));
+                        } catch (NumberFormatException ignored) {}
+                    }
+                } else {
+                    convertHexColorsToInts(child);
+                }
             }
         }
     }
