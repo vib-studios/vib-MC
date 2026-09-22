@@ -1,5 +1,6 @@
 package net.vibmc.network.packetevents;
 
+import com.github.retrooper.packetevents.protocol.nbt.NBT;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import com.github.retrooper.packetevents.protocol.nbt.NBTIntArray;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
@@ -7,6 +8,7 @@ import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState
 import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateValue;
 import net.vibmc.registry.Registry;
+import net.vibmc.world.Blocks;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,26 @@ public final class PacketEventsStateMappings {
 
     @SuppressWarnings("deprecation")
     private static int map(WrappedBlockState source, ClientVersion version) {
+        if (version.isNewerThanOrEquals(ClientVersion.V_26_1)) {
+            try {
+                NBTCompound extraFluids = Registry.get().extraResource("fluids-26.1.nbt");
+                NBT valTag = extraFluids.getTagOrNull("fluids");
+                if (valTag instanceof NBTIntArray) {
+                    int[] arr = ((NBTIntArray) valTag).getValue();
+                    if (Blocks.isWater(source)) {
+                        int level = Math.min(15, Math.max(0, Blocks.fluidLevel(source)));
+                        if (level < arr.length && arr[level] > 0) return arr[level];
+                    } else if (Blocks.isLava(source)) {
+                        int level = Math.min(15, Math.max(0, Blocks.fluidLevel(source)));
+                        int idx = 52 + level;
+                        if (idx < arr.length && arr[idx] > 0) return arr[idx];
+                    }
+                }
+            } catch (Exception ignored) {
+                /* Fallback */
+            }
+        }
+
         try {
             NBTCompound mappingsTag = Registry.get().forClient(version);
             NBTIntArray stateMap = (NBTIntArray) mappingsTag.getTagOrNull("blockstates");

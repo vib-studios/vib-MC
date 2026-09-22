@@ -141,17 +141,16 @@ public final class RegistryCodec {
 
         for (Map.Entry<String, NBT> entry : entriesComp.getTags().entrySet()) {
             ResourceLocation enchId = new ResourceLocation(entry.getKey());
-            NBT enchData = entry.getValue().copy();
-            normalizePacketEventsEntry("minecraft:enchantment", enchId, enchData, version);
-            boolean replaced = false;
-            for (int i = 0; i < existing.size(); i++) {
-                if (existing.get(i).getId().equals(enchId)) {
-                    existing.set(i, new WrapperConfigServerRegistryData.RegistryElement(enchId, enchData));
-                    replaced = true;
+            boolean exists = false;
+            for (WrapperConfigServerRegistryData.RegistryElement el : existing) {
+                if (el.getId().equals(enchId)) {
+                    exists = true;
                     break;
                 }
             }
-            if (!replaced) {
+            if (!exists) {
+                NBT enchData = entry.getValue().copy();
+                normalizePacketEventsEntry("minecraft:enchantment", enchId, enchData, version);
                 existing.add(new WrapperConfigServerRegistryData.RegistryElement(enchId, enchData));
             }
         }
@@ -197,32 +196,33 @@ public final class RegistryCodec {
             String registryName, com.github.retrooper.packetevents.util.mappings.VersionedRegistry<T> registry,
             ClientVersion version, RegistryEncoder<T> encoder) {
         ResourceLocation registryKey = new ResourceLocation(registryName);
-        Map<ResourceLocation, NBT> fallbacks = new LinkedHashMap<>();
         List<WrapperConfigServerRegistryData.RegistryElement> existing = registries.get(registryKey);
-        if (existing != null) {
+        if (existing != null && !existing.isEmpty()) {
+            Set<ResourceLocation> seen = new HashSet<>();
+            List<WrapperConfigServerRegistryData.RegistryElement> updated = new ArrayList<>(existing);
             for (WrapperConfigServerRegistryData.RegistryElement entry : existing) {
-                fallbacks.put(entry.getId(), entry.getData());
+                seen.add(entry.getId());
             }
+            for (T value : registry.getEntries()) {
+                if (value.getId(version) < 0) continue;
+                if (!seen.contains(value.getName())) {
+                    NBT encoded = encoder.encode(value);
+                    normalizePacketEventsEntry(registryName, value.getName(), encoded, version);
+                    updated.add(new WrapperConfigServerRegistryData.RegistryElement(value.getName(), encoded));
+                }
+            }
+            registries.put(registryKey, Collections.unmodifiableList(updated));
+            return;
         }
+
         List<WrapperConfigServerRegistryData.RegistryElement> entries = new ArrayList<>();
         for (T value : registry.getEntries()) {
             if (value.getId(version) < 0) continue;
             NBT encoded = encoder.encode(value);
-            mergeMissingData(encoded, fallbacks.get(value.getName()));
             normalizePacketEventsEntry(registryName, value.getName(), encoded, version);
             entries.add(new WrapperConfigServerRegistryData.RegistryElement(value.getName(), encoded));
         }
         if (!entries.isEmpty()) registries.put(registryKey, Collections.unmodifiableList(entries));
-    }
-
-    private static void mergeMissingData(NBT preferred, NBT fallback) {
-        if (!(preferred instanceof NBTCompound) || !(fallback instanceof NBTCompound)) return;
-        NBTCompound target = (NBTCompound) preferred, source = (NBTCompound) fallback;
-        for (Map.Entry<String, NBT> entry : source.getTags().entrySet()) {
-            NBT current = target.getTagOrNull(entry.getKey());
-            if (current == null) target.setTag(entry.getKey(), entry.getValue().copy());
-            else mergeMissingData(current, entry.getValue());
-        }
     }
 
     private static void normalizePacketEventsEntry(String registryName, ResourceLocation entryName, NBT encoded, ClientVersion version) {
