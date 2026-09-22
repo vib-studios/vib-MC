@@ -34,10 +34,29 @@ public final class PacketEventsTags {
         registries.put(ResourceLocation.minecraft("block"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("item"), new ArrayList<>());
 
-        // Fluid registry tags (minecraft:water -> flowing_water 1, water 2; minecraft:lava -> flowing_lava 3, lava 4)
-        List<WrapperPlayServerTags.Tag> fluids = new ArrayList<>(Arrays.asList(
-                new WrapperPlayServerTags.Tag("minecraft:water", Arrays.asList(1, 2)),
-                new WrapperPlayServerTags.Tag("minecraft:lava", Arrays.asList(3, 4))));
+        // Fluid tags populated from extra fluid mappings (fluids-26.1.nbt) for 26.1+ clients
+        List<WrapperPlayServerTags.Tag> fluids = new ArrayList<>();
+        NBTCompound extraFluids = version.isNewerThanOrEquals(ClientVersion.V_26_1)
+                ? Registry.get().extraResource("fluids-26.1.nbt")
+                : null;
+        NBT valTag = extraFluids != null ? extraFluids.getTagOrNull("fluids") : null;
+        if (valTag instanceof NBTIntArray) {
+            int[] arr = ((NBTIntArray) valTag).getValue();
+            List<Integer> waterIds = new ArrayList<>();
+            List<Integer> lavaIds = new ArrayList<>();
+            for (int i = 0; i < arr.length && i < 104; i++) {
+                if (i < 52) waterIds.add(arr[i]);
+                else lavaIds.add(arr[i]);
+            }
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:water", waterIds.isEmpty() ? Arrays.asList(1, 2) : waterIds));
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:lava", lavaIds.isEmpty() ? Arrays.asList(3, 4) : lavaIds));
+            List<WrapperPlayServerTags.Tag> blockTags = registries.get(ResourceLocation.minecraft("block"));
+            addIfAbsent(blockTags, new ResourceLocation("minecraft:water"), waterIds);
+            addIfAbsent(blockTags, new ResourceLocation("minecraft:lava"), lavaIds);
+        } else {
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:water", Arrays.asList(1, 2)));
+            fluids.add(new WrapperPlayServerTags.Tag("minecraft:lava", Arrays.asList(3, 4)));
+        }
         registries.put(ResourceLocation.minecraft("fluid"), fluids);
         registries.put(ResourceLocation.minecraft("entity_type"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("game_event"), new ArrayList<>());
