@@ -23,7 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChunkData;
-import net.vibmc.registry.ViaMappingsStateMapper;
+
 import net.vibmc.world.Blocks;
 import net.vibmc.world.WorldChunk;
 import net.vibmc.world.WorldEnvironment;
@@ -58,7 +58,7 @@ public final class PacketEventsChunkAdapter {
                 target = createLegacyPaletteSection(source, section, version);
             } else {
                 Chunk_v1_9 paletteSection = new Chunk_v1_9(0, PaletteType.CHUNK.create());
-                paletteSection.set(0, 0, 0, ViaMappingsStateMapper.id(Blocks.AIR, version));
+                paletteSection.set(0, 0, 0, PacketEventsStateMappings.id(Blocks.AIR, version));
                 target = paletteSection;
             }
             NibbleArray3d blockLight = new NibbleArray3d(4096);
@@ -67,7 +67,7 @@ public final class PacketEventsChunkAdapter {
             for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                 WrappedBlockState block = source.getBlock(x, section * 16 + y, z);
                 if (!legacyPalette && !modern18) {
-                    target.set(x, y, z, ViaMappingsStateMapper.id(block, version));
+                    target.set(x, y, z, PacketEventsStateMappings.id(block, version));
                 }
                 if (!Blocks.same(block, Blocks.AIR)) containsBlocks = true;
                 if (skylight && section * 16 + y >= highest[z*16+x]) {
@@ -123,10 +123,10 @@ public final class PacketEventsChunkAdapter {
     private static Chunk_v1_18 createModernPaletteSection(WorldChunk source,int section,
                                                            ClientVersion version){
         int[] blocks=new int[4096];Set<Integer> blockStates=new LinkedHashSet<>();
-        blockStates.add(ViaMappingsStateMapper.id(Blocks.AIR,version));int blockCount=0;
+        blockStates.add(PacketEventsStateMappings.id(Blocks.AIR,version));int blockCount=0;
         for(int y=0;y<16;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++){
             WrappedBlockState sourceState=source.getBlock(x,section*16+y,z);
-            int state=ViaMappingsStateMapper.id(sourceState,version),index=(y*16+z)*16+x;
+            int state=PacketEventsStateMappings.id(sourceState,version),index=(y*16+z)*16+x;
             blocks[index]=state;blockStates.add(state);if(!Blocks.same(sourceState,Blocks.AIR))blockCount++;
         }
         DataPalette blockPalette=createModernPalette(blocks,blockStates,4);
@@ -155,10 +155,10 @@ public final class PacketEventsChunkAdapter {
                                                           ClientVersion version){
         int[] states=new int[4096];
         Set<Integer> unique=new LinkedHashSet<>();
-        unique.add(ViaMappingsStateMapper.id(Blocks.AIR,version));
+        unique.add(PacketEventsStateMappings.id(Blocks.AIR,version));
         for(int y=0;y<16;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++){
             int index=(y*16+z)*16+x;
-            int state=ViaMappingsStateMapper.id(source.getBlock(x,section*16+y,z),version);
+            int state=PacketEventsStateMappings.id(source.getBlock(x,section*16+y,z),version);
             states[index]=state;unique.add(state);
         }
         if(unique.size()>256)throw new IllegalArgumentException(

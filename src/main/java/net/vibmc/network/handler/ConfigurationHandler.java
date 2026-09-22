@@ -10,7 +10,7 @@ import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.ProtocolState;
 import net.vibmc.network.packetevents.WrapperConfigServerUpdateTags;
 import net.vibmc.registry.ViaMappingsRegistryCodec;
-import net.vibmc.registry.ViaMappingsTags;
+import net.vibmc.network.packetevents.PacketEventsTags;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -59,7 +59,7 @@ public final class ConfigurationHandler implements PacketHandler {
             connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
                     ViaMappingsRegistryCodec.create(version)));
         }
-        connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(ViaMappingsTags.tagMap(
+        connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(PacketEventsTags.tagMap(
                 version,ViaMappingsRegistryCodec.referencedTags(version),
                 ViaMappingsRegistryCodec.referencedTagsByRegistry(version))));
         connection.getUser().sendPacket(new WrapperConfigServerConfigurationEnd());

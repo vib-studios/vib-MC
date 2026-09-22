@@ -431,7 +431,7 @@ public class PlayerManager {
         for (ServerPlayer player : players.values()) {
             if (player.getWorld() != world) continue;
             User user = player.getUser();
-            int stateId=net.vibmc.registry.ViaMappingsStateMapper.id(
+            int stateId=net.vibmc.network.packetevents.PacketEventsStateMappings.id(
                     state,user.getClientVersion());
             send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBlockChange(
                     new com.github.retrooper.packetevents.util.Vector3i(x,y,z),stateId));
@@ -583,7 +583,7 @@ public class PlayerManager {
                 com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_13)
                 && user.getClientVersion().isOlderThan(
                 com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)) {
-            send(user,net.vibmc.registry.ViaMappingsTags.create(user.getClientVersion()));
+            send(user,net.vibmc.network.packetevents.PacketEventsTags.create(user.getClientVersion()));
         }
     }
 
