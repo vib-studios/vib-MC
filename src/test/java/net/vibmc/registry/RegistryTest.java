@@ -28,6 +28,14 @@ class RegistryTest {
     }
 
     @Test
+    void twentySixTwoResolvesToTwentySixOneMappings() {
+        NBTCompound tag262 = Registry.get().forClient(ClientVersion.V_26_2);
+        assertNotNull(tag262);
+        assertEquals("26.1", tag262.getStringTagValueOrNull("release"));
+        assertEquals("split", tag262.getStringTagValueOrNull("codecType"));
+    }
+
+    @Test
     void loadsExtraMappingResources() {
         NBTCompound fluids = Registry.get().extraResource("fluids-26.1.nbt");
         assertNotNull(fluids);
