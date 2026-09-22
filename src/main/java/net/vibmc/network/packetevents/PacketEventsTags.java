@@ -1,22 +1,18 @@
 package net.vibmc.network.packetevents;
 
 import com.github.retrooper.packetevents.protocol.item.type.ItemType;
+import com.github.retrooper.packetevents.protocol.nbt.*;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateType;
 import com.github.retrooper.packetevents.resources.ResourceLocation;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTags;
-import com.viaversion.nbt.tag.Tag;
-import com.viaversion.nbt.tag.basic.IntTag;
-import com.viaversion.nbt.tag.collection.IntArrayTag;
-import com.viaversion.nbt.tag.collection.ListTag;
-import com.viaversion.nbt.tag.compound.CompoundTag;
 import net.vibmc.registry.Registry;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
 
-/** Vanilla tags sourced from PacketEvents and ViaVersion Mappings via ViaNBT, plus dynamic placeholders. */
+/** Vanilla tags sourced from PacketEvents and ViaVersion Mappings, plus dynamic placeholders. */
 public final class PacketEventsTags {
     private PacketEventsTags() {}
 
@@ -43,27 +39,27 @@ public final class PacketEventsTags {
         registries.put(ResourceLocation.minecraft("entity_type"), new ArrayList<>());
         registries.put(ResourceLocation.minecraft("game_event"), new ArrayList<>());
 
-        // Load ViaVersion Mappings tags via ViaNBT
+        // Load ViaVersion Mappings tags using PacketEvents NBT
         try {
-            CompoundTag mappingsRoot = Registry.get().forClient(version);
-            CompoundTag tagsComp = mappingsRoot.getCompoundTag("tags");
+            NBTCompound mappingsRoot = Registry.get().forClient(version);
+            NBTCompound tagsComp = mappingsRoot.getCompoundTagOrNull("tags");
             if (tagsComp != null) {
-                for (Map.Entry<String, Tag> entry : tagsComp.entrySet()) {
+                for (Map.Entry<String, NBT> entry : tagsComp.getTags().entrySet()) {
                     ResourceLocation regKey = new ResourceLocation(entry.getKey());
                     List<WrapperPlayServerTags.Tag> tagList = registries.computeIfAbsent(regKey, k -> new ArrayList<>());
-                    if (entry.getValue() instanceof ListTag) {
-                        ListTag<?> list = (ListTag<?>) entry.getValue();
-                        for (Tag item : list) {
-                            if (item instanceof CompoundTag) {
-                                CompoundTag tagEntry = (CompoundTag) item;
-                                String tagName = tagEntry.getString("name", "");
+                    if (entry.getValue() instanceof NBTList) {
+                        NBTList<?> list = (NBTList<?>) entry.getValue();
+                        for (Object itemObj : list.getTags()) {
+                            if (itemObj instanceof NBTCompound) {
+                                NBTCompound tagEntry = (NBTCompound) itemObj;
+                                String tagName = tagEntry.getStringTagValueOrDefault("name", "");
                                 List<Integer> tagValues = new ArrayList<>();
-                                Tag valTag = tagEntry.get("values");
-                                if (valTag instanceof IntArrayTag) {
-                                    for (int v : ((IntArrayTag) valTag).getValue()) tagValues.add(v);
-                                } else if (valTag instanceof ListTag) {
-                                    for (Tag v : (ListTag<?>) valTag) {
-                                        if (v instanceof IntTag) tagValues.add(((IntTag) v).getValue());
+                                NBT valTag = tagEntry.getTagOrNull("values");
+                                if (valTag instanceof NBTIntArray) {
+                                    for (int v : ((NBTIntArray) valTag).getValue()) tagValues.add(v);
+                                } else if (valTag instanceof NBTList) {
+                                    for (Object v : ((NBTList<?>) valTag).getTags()) {
+                                        if (v instanceof NBTInt) tagValues.add(((NBTInt) v).getValue());
                                     }
                                 }
                                 addIfAbsent(tagList, new ResourceLocation(tagName), tagValues);

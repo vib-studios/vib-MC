@@ -21,14 +21,12 @@ application {
 repositories {
     mavenCentral()
     maven { url = uri('https://repo.codemc.io/repository/maven-releases/') }
-    maven { url = uri('https://repo.viaversion.com') }
 }
 
 dependencies {
     implementation 'io.netty:netty-all:4.1.111.Final'
     implementation 'com.github.retrooper:packetevents-api:2.13.0'
     implementation 'com.github.retrooper:packetevents-netty-common:2.13.0'
-    implementation 'com.viaversion:nbt:5.1.2'
     implementation 'net.kyori:adventure-api:4.26.1'
     implementation 'net.kyori:adventure-nbt:4.26.1'
     implementation 'net.kyori:adventure-text-serializer-gson:4.26.1'

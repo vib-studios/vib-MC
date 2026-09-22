@@ -1,11 +1,11 @@
 package net.vibmc.network.packetevents;
 
+import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
+import com.github.retrooper.packetevents.protocol.nbt.NBTIntArray;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateTypes;
 import com.github.retrooper.packetevents.protocol.world.states.type.StateValue;
-import com.viaversion.nbt.tag.collection.IntArrayTag;
-import com.viaversion.nbt.tag.compound.CompoundTag;
 import net.vibmc.registry.Registry;
 
 import java.util.Map;
@@ -33,8 +33,8 @@ public final class PacketEventsStateMappings {
     @SuppressWarnings("deprecation")
     private static int map(WrappedBlockState source, ClientVersion version) {
         try {
-            CompoundTag mappingsTag = Registry.get().forClient(version);
-            IntArrayTag stateMap = mappingsTag.getIntArrayTag("blockstates");
+            NBTCompound mappingsTag = Registry.get().forClient(version);
+            NBTIntArray stateMap = (NBTIntArray) mappingsTag.getTagOrNull("blockstates");
             if (stateMap != null && stateMap.getValue() != null) {
                 int[] arr = stateMap.getValue();
                 int sourceId = source.getGlobalId();

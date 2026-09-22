@@ -1,7 +1,7 @@
 package net.vibmc.registry;
 
+import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
-import com.viaversion.nbt.tag.compound.CompoundTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -14,23 +14,34 @@ class RegistryTest {
     }
 
     @Test
-    void resolvesAndLoadsViaVersionMappingsNbtSnapshots() {
-        CompoundTag canonical = Registry.get().forClient(ClientVersion.V_1_12_2);
+    void resolvesAndLoadsViaVersionMappingsNbtSnapshotsWithPacketEventsNbt() {
+        NBTCompound canonical = Registry.get().forClient(ClientVersion.V_1_12_2);
         assertNotNull(canonical);
 
-        CompoundTag modern = Registry.get().forClient(ClientVersion.V_1_19_4);
+        NBTCompound modern = Registry.get().forClient(ClientVersion.V_1_19_4);
         assertNotNull(modern);
-        assertEquals("1.19.4", modern.getString("release"));
+        assertEquals("1.19.4", modern.getStringTagValueOrNull("release"));
 
-        CompoundTag split = Registry.get().forClient(ClientVersion.V_1_20_5);
+        NBTCompound split = Registry.get().forClient(ClientVersion.V_1_20_5);
         assertNotNull(split);
-        assertEquals("split", split.getString("codecType"));
+        assertEquals("split", split.getStringTagValueOrNull("codecType"));
+    }
+
+    @Test
+    void loadsExtraMappingResources() {
+        NBTCompound fluids = Registry.get().extraResource("fluids-26.1.nbt");
+        assertNotNull(fluids);
+        assertNotNull(fluids.getTagOrNull("fluids"));
+
+        NBTCompound enchantments = Registry.get().extraResource("enchantments-1.21.nbt");
+        assertNotNull(enchantments);
+        assertNotNull(enchantments.getTagOrNull("entries"));
     }
 
     @Test
     void mappingsNbtIsParsedAndCached() {
-        CompoundTag tag1 = Registry.get().forClient(ClientVersion.V_1_20);
-        CompoundTag tag2 = Registry.get().forClient(ClientVersion.V_1_20);
+        NBTCompound tag1 = Registry.get().forClient(ClientVersion.V_1_20);
+        NBTCompound tag2 = Registry.get().forClient(ClientVersion.V_1_20);
         assertSame(tag1, tag2);
     }
 }

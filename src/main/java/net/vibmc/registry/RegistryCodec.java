@@ -4,14 +4,11 @@ import com.github.retrooper.packetevents.protocol.nbt.*;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.resources.ResourceLocation;
 import com.github.retrooper.packetevents.wrapper.configuration.server.WrapperConfigServerRegistryData;
-import com.viaversion.nbt.tag.Tag;
-import com.viaversion.nbt.tag.collection.ListTag;
-import com.viaversion.nbt.tag.compound.CompoundTag;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Version-selected Configuration registry data loaded from ViaVersion Mappings via ViaNBT. */
+/** Version-selected Configuration registry data loaded directly into PacketEvents NBT from ViaVersion Mappings. */
 public final class RegistryCodec {
     private static final Map<String, RegistryData> CACHE = new ConcurrentHashMap<>();
 
@@ -60,41 +57,40 @@ public final class RegistryCodec {
         if (version.isOlderThan(ClientVersion.V_1_16_2)) {
             return new RegistryData("legacy", new NBTCompound(), null, Collections.emptySet(), Collections.emptyMap());
         }
-        CompoundTag mappingsTag = Registry.get().forClient(version);
+        NBTCompound mappingsTag = Registry.get().forClient(version);
         String release = Registry.get().selectRelease(version);
         return CACHE.computeIfAbsent(release, ignored -> load(mappingsTag, release, version));
     }
 
-    private static RegistryData load(CompoundTag root, String release, ClientVersion version) {
-        String codecType = root.getString("codecType", "compound");
+    private static RegistryData load(NBTCompound root, String release, ClientVersion version) {
+        String codecType = root.getStringTagValueOrDefault("codecType", "compound");
         Set<ResourceLocation> referencedTags = new LinkedHashSet<>();
         Map<ResourceLocation, Set<ResourceLocation>> tagsByRegistry = new LinkedHashMap<>();
 
         if ("compound".equals(codecType)) {
-            CompoundTag codecVia = root.getCompoundTag("dimensionCodec");
-            if (codecVia == null) codecVia = new CompoundTag();
-            NBTCompound legacy = NbtMapper.toPacketEventsCompound(codecVia);
+            NBTCompound legacy = root.getCompoundTagOrNull("dimensionCodec");
+            if (legacy == null) legacy = new NBTCompound();
+            else legacy = legacy.copy();
             collectTagReferences(legacy, referencedTags);
             forceClassicHeight(legacy);
             return new RegistryData(release, legacy, null, Collections.unmodifiableSet(referencedTags), Collections.emptyMap());
         } else {
-            CompoundTag regsVia = root.getCompoundTag("registries");
+            NBTCompound regsComp = root.getCompoundTagOrNull("registries");
             Map<ResourceLocation, List<WrapperConfigServerRegistryData.RegistryElement>> registries = new LinkedHashMap<>();
 
-            if (regsVia != null) {
-                for (Map.Entry<String, Tag> entry : regsVia.entrySet()) {
+            if (regsComp != null) {
+                for (Map.Entry<String, NBT> entry : regsComp.getTags().entrySet()) {
                     ResourceLocation registryKey = new ResourceLocation(entry.getKey());
                     Set<ResourceLocation> registryTags = new LinkedHashSet<>();
                     List<WrapperConfigServerRegistryData.RegistryElement> elements = new ArrayList<>();
 
-                    if (entry.getValue() instanceof ListTag) {
-                        ListTag<?> list = (ListTag<?>) entry.getValue();
-                        for (Tag item : list) {
-                            if (item instanceof CompoundTag) {
-                                CompoundTag elemTag = (CompoundTag) item;
-                                String key = elemTag.getString("key", "");
-                                Tag valVia = elemTag.get("value");
-                                NBT valPE = NbtMapper.toPacketEvents(valVia);
+                    if (entry.getValue() instanceof NBTList) {
+                        NBTList<?> list = (NBTList<?>) entry.getValue();
+                        for (Object itemObj : list.getTags()) {
+                            if (itemObj instanceof NBTCompound) {
+                                NBTCompound elemTag = (NBTCompound) itemObj;
+                                String key = elemTag.getStringTagValueOrDefault("key", "");
+                                NBT valPE = elemTag.getTagOrNull("value");
 
                                 if ("minecraft:dimension_type".equals(registryKey.toString()) && valPE instanceof NBTCompound) {
                                     forceClassicDimension((NBTCompound) valPE);
@@ -102,7 +98,7 @@ public final class RegistryCodec {
 
                                 collectTagReferences(valPE, registryTags);
                                 collectTagReferences(valPE, referencedTags);
-                                elements.add(new WrapperConfigServerRegistryData.RegistryElement(new ResourceLocation(key), valPE));
+                                elements.add(new WrapperConfigServerRegistryData.RegistryElement(new ResourceLocation(key), valPE == null ? null : valPE.copy()));
                             }
                         }
                     }
