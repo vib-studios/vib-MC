@@ -15,7 +15,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
 
-/** Vanilla and dynamic tags sourced from ViaVersion Mappings via ViaNBT and PacketEvents. */
+/**
+ * Registry tags following the 3-tier cascade precedence:
+ * 1. PacketEvents (where provided)
+ * 2. ViaVersion Mappings via ViaNBT
+ * 3. Manual dynamic placeholders (ONLY if both PacketEvents and ViaVersion Mappings do not provide them)
+ */
 public final class ViaMappingsTags {
     private ViaMappingsTags() {}
 
@@ -35,15 +40,18 @@ public final class ViaMappingsTags {
             ClientVersion version, Set<ResourceLocation> referencedTags,
             Map<ResourceLocation, Set<ResourceLocation>> tagsByRegistry) {
         Map<ResourceLocation, List<WrapperPlayServerTags.Tag>> registries = new LinkedHashMap<>();
-        registries.put(ResourceLocation.minecraft("block"), new ArrayList<>());
-        registries.put(ResourceLocation.minecraft("item"), new ArrayList<>());
-        registries.put(ResourceLocation.minecraft("fluid"), new ArrayList<>(Arrays.asList(
-                new WrapperPlayServerTags.Tag("minecraft:water", Arrays.asList(1, 2)),
-                new WrapperPlayServerTags.Tag("minecraft:lava", Arrays.asList(3, 4)))));
-        registries.put(ResourceLocation.minecraft("entity_type"), new ArrayList<>());
-        registries.put(ResourceLocation.minecraft("game_event"), new ArrayList<>());
 
-        // Load tags from ViaVersion Mappings NBT if available
+        // Tier 1: PacketEvents-provided block and item tags
+        List<WrapperPlayServerTags.Tag> blockTags = new ArrayList<>();
+        List<WrapperPlayServerTags.Tag> itemTags = new ArrayList<>();
+        if (version.isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
+            addPacketEventsBlockTags(blockTags, version);
+            addPacketEventsItemTags(itemTags, version);
+        }
+        registries.put(ResourceLocation.minecraft("block"), blockTags);
+        registries.put(ResourceLocation.minecraft("item"), itemTags);
+
+        // Tier 2: ViaVersion Mappings tags (loaded via ViaNBT) for other/missing tags
         try {
             CompoundTag mappingsRoot = ViaMappingsRegistry.get().forClient(version);
             CompoundTag tagsComp = mappingsRoot.getCompoundTag("tags");
@@ -73,13 +81,16 @@ public final class ViaMappingsTags {
                 }
             }
         } catch (Exception ignored) {
-            // Fallback to PacketEvents tags
+            // Fallback if mappings tag loading fails
         }
 
-        if (version.isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
-            addPacketEventsBlockTags(registries.get(ResourceLocation.minecraft("block")), version);
-            addPacketEventsItemTags(registries.get(ResourceLocation.minecraft("item")), version);
+        // Default fluid tags if omitted in mappings
+        List<WrapperPlayServerTags.Tag> fluids = registries.computeIfAbsent(ResourceLocation.minecraft("fluid"), k -> new ArrayList<>());
+        addIfAbsent(fluids, new ResourceLocation("minecraft:water"), Arrays.asList(1, 2));
+        addIfAbsent(fluids, new ResourceLocation("minecraft:lava"), Arrays.asList(3, 4));
 
+        // Tier 3: Manual dynamic tag placeholders ONLY if missing from both PacketEvents & ViaVersion Mappings
+        if (version.isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
             for (String registry : Arrays.asList("block", "item", "fluid", "entity_type", "enchantment", "damage_type")) {
                 List<WrapperPlayServerTags.Tag> values = registries.computeIfAbsent(
                         ResourceLocation.minecraft(registry), ignored -> new ArrayList<>());
