@@ -2,6 +2,8 @@ package net.vibmc.world;
 
 import net.vibmc.entity.Entity;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import com.github.retrooper.packetevents.protocol.world.biome.Biome;
+import com.github.retrooper.packetevents.protocol.world.biome.Biomes;
 import net.vibmc.world.storage.WorldStorage;
 
 import java.util.ArrayList;
@@ -99,10 +101,17 @@ public class World {
      * not start flowing the moment it loads.
      */
     public boolean setBlockAndUpdate(int x, int y, int z, WrappedBlockState block) {
+        // If the placed block is a connecting block (fence, wall, pane...), compute its connections
+        // immediately using ViaVersion Mappings blockConnections.json data.
+        if (BlockConnections.isConnectingBlock(block)) {
+            block = BlockConnections.updateState(this, x, y, z, block);
+        }
         if (!setBlockAt(x, y, z, block)) return false;
         net.vibmc.server.VibMC server = net.vibmc.server.VibMC.getInstance();
         if (server != null) server.getPlayerManager().broadcastBlockChange(this, x, y, z, block);
         blockUpdates.scheduleNeighbours(x, y, z);
+        // Update neighboring connecting blocks (fences, walls, panes, etc.) so they visually connect.
+        BlockConnections.updateConnections(this, x, y, z);
         return true;
     }
 
@@ -267,17 +276,25 @@ public class World {
         return 65;
     }
 
-    public String biomeAt(int x, int z) {
-        if (environment == WorldEnvironment.NETHER) return "minecraft:nether_wastes";
-        if (environment == WorldEnvironment.END) return "minecraft:the_end";
+    public Biome biomeAt(int x, int z) {
+        if (environment == WorldEnvironment.NETHER) return Biomes.NETHER_WASTES;
+        if (environment == WorldEnvironment.END) return Biomes.THE_END;
         net.vibmc.world.gen.TerrainGenerator terrain = new net.vibmc.world.gen.TerrainGenerator(seed);
-        if (terrain.getHeight(x, z) < 62) return "minecraft:ocean";
+        int height = terrain.getHeight(x, z);
+        if (height < 62) return Biomes.OCEAN;
+        // Beach for low areas near sea level – prevents taiga/plains showing as taiga on sand
+        if (height <= 64) return Biomes.BEACH;
         double climate = terrain.fbm(x * 0.0017, z * 0.0017, 3);
         double moisture = terrain.fbm(x * 0.0021 + 500, z * 0.0021 - 500, 3);
-        if (climate > 0.38 && moisture < -0.05) return "minecraft:desert";
-        if (climate < -0.35) return "minecraft:taiga";
-        if (moisture > 0.2) return "minecraft:forest";
-        return "minecraft:plains";
+        if (climate > 0.38 && moisture < -0.05) return Biomes.DESERT;
+        if (climate < -0.35) return Biomes.TAIGA;
+        if (moisture > 0.2) return Biomes.FOREST;
+        return Biomes.PLAINS;
+    }
+
+    /** Legacy string version for structure filtering – delegates to Biome name */
+    public String biomeAtName(int x, int z) {
+        return biomeAt(x, z).getName().toString();
     }
 
     public int getSeaLevel() {

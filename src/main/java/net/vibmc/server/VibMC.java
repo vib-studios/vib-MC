@@ -70,8 +70,15 @@ public final class VibMC {
             if (config.useLegacyProxyForwarding() && !config.onlineMode()) {
                 throw new IOException("proxy-mode=legacy requires online-mode=true");
             }
-            net.vibmc.registry.MinecraftDataRegistry.initialize();
+            // Registry data now comes from PacketEvents versioned registries + ViaVersion mappings NBT
+            // read via PacketEvents NBT reader (ViaMappings). No minecraft-data initialization needed.
             net.vibmc.network.packetevents.PacketEventsRuntime.initialize();
+            // Preload block connections (fences, walls, panes, etc.) from ViaVersion Mappings JSON
+            try {
+                net.vibmc.world.BlockConnections.get();
+            } catch (Exception ex) {
+                System.err.println("Failed to preload BlockConnections: " + ex);
+            }
             new VibMC(config).start();
         } catch (IOException e) {
             System.err.println("Unable to start vib-MC: " + e.getMessage());
