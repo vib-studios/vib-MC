@@ -364,6 +364,15 @@ public final class RegistryDataCodec {
                     (wrapper, value) -> WorldClock.DIRECT_CODEC.encode(wrapper, (WorldClock) value));
         }
 
+        if (version.isNewerThanOrEquals(ClientVersion.V_26_2)) {
+            try {
+                putRegistryWithCodec(out, "minecraft:sulfur_cube_archetype",
+                        com.github.retrooper.packetevents.protocol.entity.sulfurcube.SulfurCubeArchtypes.getRegistry(),
+                        version,
+                        (wrapper, value) -> com.github.retrooper.packetevents.protocol.entity.sulfurcube.SulfurCubeArchtype.DIRECT_CODEC.encode(wrapper, value));
+            } catch (Throwable ignored) {}
+        }
+
     }
 
     // ---- safe encoders ----
