@@ -96,7 +96,7 @@ public final class ServerConfig {
         defaults.put("generate-structures", "true");
         defaults.put("level-name", "world");
         defaults.put("level-type", "default");
-        defaults.put("max-build-height", "320");
+        defaults.put("max-build-height", "256");
         defaults.put("max-players", "20");
         defaults.put("max-tick-time", "60000");
         defaults.put("motd", "A vib-MC Server");

@@ -77,6 +77,28 @@ public final class VibGameplayPacketListener implements PacketListener {
                 submit(player, () -> VibMC.getInstance().getPlayerManager().respawnPlayer(player));
             }
             event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.PICK_ITEM) {
+            WrapperPlayClientPickItem wrapper = new WrapperPlayClientPickItem(event);
+            int slot = wrapper.getSlot();
+            submit(player, () -> handlePickItem(player, slot));
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.PICK_ITEM_FROM_BLOCK) {
+            WrapperPlayClientPickItemFromBlock wrapper = new WrapperPlayClientPickItemFromBlock(event);
+            Vector3i pos = wrapper.getBlockPos();
+            boolean includeData = wrapper.isIncludeData();
+            submit(player, () -> handlePickItemFromBlock(player, pos, includeData));
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.PICK_ITEM_FROM_ENTITY) {
+            WrapperPlayClientPickItemFromEntity wrapper = new WrapperPlayClientPickItemFromEntity(event);
+            int entityId = wrapper.getEntityId();
+            boolean includeData = wrapper.isIncludeData();
+            submit(player, () -> handlePickItemFromEntity(player, entityId, includeData));
+            event.setCancelled(true);
+        } else if (event.getPacketType() == PacketType.Play.Client.CHANGE_GAME_MODE) {
+            WrapperPlayClientChangeGameMode wrapper = new WrapperPlayClientChangeGameMode(event);
+            com.github.retrooper.packetevents.protocol.player.GameMode peMode = wrapper.getGameMode();
+            submit(player, () -> handleChangeGameMode(player, peMode));
+            event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.CREATIVE_INVENTORY_ACTION) {
             WrapperPlayClientCreativeInventoryAction wrapper = new WrapperPlayClientCreativeInventoryAction(event);
             int slot = wrapper.getSlot();
@@ -84,12 +106,11 @@ public final class VibGameplayPacketListener implements PacketListener {
             submit(player, () -> {
                 if (player.getGameModeEnum() == GameMode.CREATIVE && slot >= 36 && slot <= 44) {
                     player.getInventory().setSlot(slot - 36, stack);
+                    player.sendInventory();
                 }
             });
             event.setCancelled(true);
         } else if (event.getPacketType() == PacketType.Play.Client.CHAT_COMMAND) {
-            // 1.19 split slash commands out of the ordinary chat packet. The command field
-            // excludes the leading slash, while vib-MC's command manager expects it.
             String command = new WrapperPlayClientChatCommand(event).getCommand();
             submit(player, () -> VibMC.getInstance().getPlayerManager().handleChat(player, "/" + command));
             event.setCancelled(true);
@@ -150,4 +171,217 @@ public final class VibGameplayPacketListener implements PacketListener {
         if (!accepted) player.disconnect("Server overloaded: too many pending gameplay actions");
     }
 
+    // --- Gamemode switcher (F3+F4) 1.21.6+ ---
+    private static void handleChangeGameMode(ServerPlayer player, com.github.retrooper.packetevents.protocol.player.GameMode peMode) {
+        if (peMode == null) return;
+        // Map PacketEvents GameMode to vib-MC GameMode
+        GameMode target;
+        try {
+            target = GameMode.byId(peMode.getId());
+        } catch (Throwable t) {
+            // Fallback by name
+            try {
+                target = GameMode.valueOf(peMode.name());
+            } catch (Throwable t2) {
+                return;
+            }
+        }
+        // Allow all players to use F3+F4 because we send op level 4 to everyone.
+        // The permission check for /gamemode command is separate; F3+F4 should work without op.
+        player.setGameMode(target);
+    }
+
+    // --- Pick Block handling (vanilla PlayerInventory.addPickBlock) ---
+
+    private static void handlePickItem(ServerPlayer player, int windowSlot) {
+        int invSlot = windowSlotToInventorySlot(windowSlot);
+        if (invSlot < 0 || invSlot >= player.getInventory().getSize()) return;
+        ItemStack source = player.getInventory().getSlot(invSlot);
+        if (source.isEmpty()) return;
+        if (isValidHotbarIndex(invSlot)) {
+            player.setHeldItemSlot(invSlot);
+            sendHeldItemChange(player, invSlot);
+            player.sendInventory();
+            player.broadcastEquipment();
+            return;
+        }
+        swapSlotWithHotbar(player, invSlot);
+        player.sendInventory();
+        player.broadcastEquipment();
+    }
+
+    private static void handlePickItemFromBlock(ServerPlayer player, Vector3i pos, boolean includeData) {
+        if (pos == null) return;
+        net.vibmc.world.World world = player.getWorld();
+        if (world == null) return;
+        int x = pos.getX(), y = pos.getY(), z = pos.getZ();
+        if (y < 0 || y >= 256) return;
+        com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block = world.getBlockAt(x, y, z);
+        if (block == null || net.vibmc.world.Blocks.same(block, net.vibmc.world.Blocks.AIR)) return;
+        ItemStack picked = blockToItem(block, player.getUser().getClientVersion());
+        if (picked.isEmpty()) return;
+
+        boolean creative = player.getGameModeEnum() == GameMode.CREATIVE;
+        int found = getSlotWithStack(player, picked);
+
+        if (isValidHotbarIndex(found)) {
+            player.setHeldItemSlot(found);
+            sendHeldItemChange(player, found);
+            player.sendInventory();
+            player.broadcastEquipment();
+            return;
+        }
+
+        if (found == -1) {
+            if (!creative) {
+                return;
+            }
+            int swappable = getSwappableHotbarSlot(player);
+            ItemStack current = player.getInventory().getSlot(swappable);
+            if (!current.isEmpty()) {
+                int empty = getEmptySlot(player);
+                if (empty != -1 && empty != swappable) {
+                    player.getInventory().setSlot(empty, current);
+                }
+            }
+            player.getInventory().setSlot(swappable, picked);
+            player.setHeldItemSlot(swappable);
+            sendHeldItemChange(player, swappable);
+            player.sendInventory();
+            player.broadcastEquipment();
+            return;
+        } else {
+            int swappable = getSwappableHotbarSlot(player);
+            ItemStack swappableStack = player.getInventory().getSlot(swappable);
+            ItemStack slotStack = player.getInventory().getSlot(found);
+            player.getInventory().setSlot(swappable, slotStack);
+            player.getInventory().setSlot(found, swappableStack);
+            player.setHeldItemSlot(swappable);
+            sendHeldItemChange(player, swappable);
+            player.sendInventory();
+            player.broadcastEquipment();
+        }
+    }
+
+    private static void handlePickItemFromEntity(ServerPlayer player, int entityId, boolean includeData) {
+        // Not implemented – could give spawn egg in creative
+    }
+
+    // --- Vanilla inventory helpers ---
+
+    private static int windowSlotToInventorySlot(int windowSlot) {
+        if (windowSlot >= 36 && windowSlot <= 44) return windowSlot - 36;
+        if (windowSlot >= 9 && windowSlot <= 35) return windowSlot;
+        if (windowSlot >= 0 && windowSlot <= 8) return windowSlot;
+        return -1;
+    }
+
+    private static boolean isValidHotbarIndex(int slot) {
+        return slot >= 0 && slot < 9;
+    }
+
+    private static int getEmptySlot(ServerPlayer player) {
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            if (player.getInventory().getSlot(i).isEmpty()) return i;
+        }
+        return -1;
+    }
+
+    private static int getSlotWithStack(ServerPlayer player, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return -1;
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            ItemStack other = player.getInventory().getSlot(i);
+            if (other.isEmpty()) continue;
+            if (other.getType() == stack.getType()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int getSwappableHotbarSlot(ServerPlayer player) {
+        int selected = player.getHeldItemSlot();
+        for (int offset = 0; offset < 9; offset++) {
+            int slot = (selected + offset) % 9;
+            if (player.getInventory().getSlot(slot).isEmpty()) return slot;
+        }
+        for (int offset = 0; offset < 9; offset++) {
+            int slot = (selected + offset) % 9;
+            ItemStack stack = player.getInventory().getSlot(slot);
+            if (!stack.isEmpty() && !isEnchanted(stack)) return slot;
+        }
+        return selected;
+    }
+
+    private static void swapSlotWithHotbar(ServerPlayer player, int slot) {
+        int swappable = getSwappableHotbarSlot(player);
+        ItemStack swappableStack = player.getInventory().getSlot(swappable);
+        ItemStack slotStack = player.getInventory().getSlot(slot);
+        player.getInventory().setSlot(swappable, slotStack);
+        player.getInventory().setSlot(slot, swappableStack);
+        player.setHeldItemSlot(swappable);
+        sendHeldItemChange(player, swappable);
+    }
+
+    private static void sendHeldItemChange(ServerPlayer player, int slot) {
+        try {
+            player.getUser().sendPacket(
+                    new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerHeldItemChange(slot));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean isEnchanted(ItemStack stack) {
+        try {
+            if (stack.getNBT() != null) {
+                return stack.getNBT().getTags().containsKey("Enchantments") || stack.getNBT().getTags().containsKey("ench");
+            }
+            return stack.getComponent(com.github.retrooper.packetevents.protocol.component.ComponentTypes.ENCHANTMENTS).isPresent()
+                    && !stack.getComponent(com.github.retrooper.packetevents.protocol.component.ComponentTypes.ENCHANTMENTS).get().isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static ItemStack blockToItem(com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState block,
+                                         com.github.retrooper.packetevents.protocol.player.ClientVersion version) {
+        if (block == null) return ItemStack.EMPTY;
+        com.github.retrooper.packetevents.protocol.world.states.type.StateType type = block.getType();
+        if (type == null) return ItemStack.EMPTY;
+        try {
+            com.github.retrooper.packetevents.protocol.item.type.ItemType itemType =
+                    com.github.retrooper.packetevents.protocol.item.type.ItemTypes.getTypePlacingState(type);
+            if (itemType != null) {
+                return ItemStack.builder().type(itemType).amount(1)
+                        .version(com.github.retrooper.packetevents.protocol.player.ClientVersion.getLatest()).build();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            String name = type.getName().toString();
+            com.github.retrooper.packetevents.protocol.item.type.ItemType byName =
+                    com.github.retrooper.packetevents.protocol.item.type.ItemTypes.getByName(name);
+            if (byName != null) {
+                return ItemStack.builder().type(byName).amount(1)
+                        .version(com.github.retrooper.packetevents.protocol.player.ClientVersion.getLatest()).build();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (type == com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.WATER) {
+                com.github.retrooper.packetevents.protocol.item.type.ItemType waterBucket =
+                        com.github.retrooper.packetevents.protocol.item.type.ItemTypes.getByName("minecraft:water_bucket");
+                if (waterBucket != null) return ItemStack.builder().type(waterBucket).amount(1)
+                        .version(com.github.retrooper.packetevents.protocol.player.ClientVersion.getLatest()).build();
+            }
+            if (type == com.github.retrooper.packetevents.protocol.world.states.type.StateTypes.LAVA) {
+                com.github.retrooper.packetevents.protocol.item.type.ItemType lavaBucket =
+                        com.github.retrooper.packetevents.protocol.item.type.ItemTypes.getByName("minecraft:lava_bucket");
+                if (lavaBucket != null) return ItemStack.builder().type(lavaBucket).amount(1)
+                        .version(com.github.retrooper.packetevents.protocol.player.ClientVersion.getLatest()).build();
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.EMPTY;
+    }
 }

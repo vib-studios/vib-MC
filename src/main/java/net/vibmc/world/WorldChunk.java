@@ -2,6 +2,7 @@ package net.vibmc.world;
 
 import net.vibmc.world.gen.TerrainGenerator;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
+import com.github.retrooper.packetevents.protocol.world.biome.Biomes;
 import java.util.Arrays;
 import net.vibmc.world.structure.StructureRegistry;
 
@@ -64,7 +65,8 @@ public class WorldChunk {
                     chunk.setBlock(x, y, z, oreOrStone(terrain, worldX, y, worldZ));
                 }
                 boolean beach = surface <= seaLevel + 1
-                        || "minecraft:desert".equals(chunk.world.biomeAt(worldX, worldZ));
+                        || Biomes.DESERT.equals(chunk.world.biomeAt(worldX, worldZ))
+                        || Biomes.BEACH.equals(chunk.world.biomeAt(worldX, worldZ));
                 for (int y = Math.max(1, surface - 3); y < surface; y++) {
                     chunk.setBlock(x, y, z, beach ? Blocks.SAND : Blocks.DIRT);
                 }
@@ -84,7 +86,7 @@ public class WorldChunk {
      */
     private static void decorateDesert(WorldChunk chunk, TerrainGenerator terrain, int x, int z,
                                        int worldX, int worldZ, int surface) {
-        if (!"minecraft:desert".equals(chunk.world.biomeAt(worldX, worldZ))) return;
+        if (!Biomes.DESERT.equals(chunk.world.biomeAt(worldX, worldZ))) return;
         int hash = terrain.hash(worldX + 0x0CAC, worldZ - 0x0705);
         if ((hash & 0xffff) / 65535.0 > 0.02) return;
         // Vanilla cacti refuse to grow against a neighbour, which is what keeps them isolated.

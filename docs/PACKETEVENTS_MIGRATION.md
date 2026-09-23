@@ -28,6 +28,18 @@ PacketEvents is the Minecraft wire-protocol implementation and Netty is the sock
 - Chunk persistence format v2 stores PacketEvents wrapped-state global IDs. Older rapid-development worlds intentionally require reset.
 - Semantic generator biomes map to PacketEvents `Biome` identities. Protocol 1.12.2 still requires legacy byte biome IDs, which PacketEvents does not expose as a stable public numeric registry, so the adapter contains the seven required legacy numbers.
 - The server retains `Chunk`, `World`, and `Inventory` as gameplay/persistence owners; their protocol-represented contents are PacketEvents objects.
+- Registry/configuration payloads are built from PacketEvents versioned registries (Biomes, DimensionTypes, DamageTypes, etc.)
+  and ViaVersion mapping NBT assets read via PacketEvents NBT reader (`DefaultNBTSerializer` + `NBTLimiter.noop()`).
+  ViaVersion data lives under `src/main/resources/vendored/viaversion-mappings/` and includes
+  `mappings-1.13to1.13.2.nbt` for blockstate translation, `timeline-registry-1.21.11.nbt`,
+  `sound-variant-registries-26.1.nbt`, and identifier tables. No ViaVersion runtime is used – only its mapping data.
+- Block-state translation for 1.13/1.13.1 uses the ViaVersion mapping inversion (data-driven) instead of a magic -1 shift.
+- Tags use `BlockTags.getByName` / `ItemTags.getByName` instead of reflection over `byName` or static fields.
+  Referenced tags are derived by scanning produced NBT for `#`-prefixed strings.
+- Manual registry NBT overrides (classic height forcing, fog_color defaults, music weighted-list wrapping,
+  wolf_variant assets reshaping, enchantment effect renaming, hardcoded dialog/timeline/banner_pattern lists)
+  have been removed. `test_environment` / `test_instance` (1.21.11+) have no data source in either PE or ViaVersion
+  and are dropped. Fluid tags `water` [1,2] / `lava` [3,4] remain as minimal vanilla constants (no source).
 
 ## Chunk sending pipeline
 

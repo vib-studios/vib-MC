@@ -183,7 +183,16 @@ World chunks store PacketEvents `WrappedBlockState` objects directly, and invent
 
 A `ServerPlayer` is created immediately for every PacketEvents `User`. Its world, UUID, username, and other not-yet-known login state remain nullable until authentication completes; `isInWorld()` distinguishes active gameplay players. Packet wrappers are created at call sites and sent directly with `User.sendPacket(...)`; there is no pending-connection class, packet facade, or parallel protocol implementation.
 
-Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers. The vendored PrismarineJS minecraft-data snapshots are used only for Java-edition registry/configuration payloads such as the modern Join Game dimension codec. `tools/update-minecraft-data.sh` creates a sparse checkout containing only the required PC `version.json` and `loginPacket.json` snapshots plus their indexes, and Gradle verifies that no unrelated datasets enter the runnable JAR.
+Generator biomes use stable Minecraft resource keys. PacketEvents remains responsible for gameplay mappings and packet wrappers.
+Registry and configuration payloads are built from PacketEvents versioned registries, with ViaVersion mapping NBT assets
+read via PacketEvents' NBT reader (`DefaultNBTSerializer`). The vendored ViaVersion data lives under
+`src/main/resources/vendored/viaversion-mappings/` (binary NBT such as `dimension-registry-1.16.2.nbt`,
+`timeline-registry-1.21.11.nbt`, `sound-variant-registries-26.1.nbt`, `mappings-1.13to1.13.2.nbt`, etc.).
+`tools/update-via-mappings.sh` sparse-clones ViaVersion to refresh those assets, and Gradle verifies that only
+`.nbt`/`.json` files are bundled. Block-state translation for 1.13/1.13.1 uses the ViaVersion blockstate mapping
+(`mappings-1.13to1.13.2.nbt`) data-driven via `ViaMappings`, replacing the previous magic -1 shift. Tags use
+`BlockTags.getByName` / `ItemTags.getByName` instead of reflection, and referenced tags are derived by scanning the
+produced NBT for `#`-prefixed references.
 
 ## Movement policy
 
@@ -247,7 +256,7 @@ net.vibmc.entity          — entities
 net.vibmc.player          — players
 net.vibmc.inventory       — inventories, windows, and item data
 net.vibmc.crafting        — recipes and smelting
-net.vibmc.registry        — vendored Minecraft data registries
+net.vibmc.registry        — PacketEvents-backed registries + ViaVersion mappings NBT via PE NBT reader
 net.vibmc.plugin          — plugin support
 net.vibmc.command         — commands
 net.vibmc.permission      — permissions

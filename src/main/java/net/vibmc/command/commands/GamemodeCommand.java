@@ -10,7 +10,7 @@ import java.util.Locale;
 
 public class GamemodeCommand extends Command {
     public GamemodeCommand() {
-        super("gamemode", "Change your game mode", "/gamemode <mode> [player]", "vibmc.command.gamemode");
+        super("gamemode", "Change your game mode", "/gamemode <mode> [player]", "");
     }
 
     @Override

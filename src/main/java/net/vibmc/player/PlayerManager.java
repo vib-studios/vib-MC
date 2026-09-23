@@ -177,6 +177,7 @@ public class PlayerManager {
             sendUpdateHealth(player.getUser(),player);
             player.sendInventory();
             sendStartWaitingForChunks(player.getUser());
+            sendOpLevel(player.getUser(), player);
             synchronizePlayerVisibility(player);
             sendInitialChunks(player);
             sendWeather(player.getUser(),player.getWorld().weatherSystem().weather());
@@ -220,6 +221,7 @@ public class PlayerManager {
             sendUpdateHealth(player.getUser(),player);
             player.sendInventory();
             sendStartWaitingForChunks(player.getUser());
+            sendOpLevel(player.getUser(), player);
             synchronizePlayerVisibility(player);
             sendInitialChunks(player);
             sendWeather(player.getUser(), destination.weatherSystem().weather());
@@ -533,9 +535,16 @@ public class PlayerManager {
     private void sendJoinPackets(ServerPlayer player) {
         User user = player.getUser();
         World world = player.getWorld();
-        // Resolve and cache this connection's immutable minecraft-data manifest. Individual
-        // registry files are parsed lazily when a protocol adapter requests them.
-        net.vibmc.registry.MinecraftDataRegistry.get().forClient(user.getClientVersion());
+        // Warm up registry codec cache for this client version (now backed by PE + ViaVersion NBT)
+        try {
+            if (net.vibmc.registry.RegistryDataCodec.usesSplitRegistries(user.getClientVersion())) {
+                net.vibmc.registry.RegistryDataCodec.splitRegistries(user.getClientVersion());
+            } else {
+                net.vibmc.registry.RegistryDataCodec.create(user.getClientVersion());
+            }
+        } catch (Exception ignored) {
+            // Cache warmup best-effort
+        }
 
         sendLoginPlay(user, player);
         sendRegistryTags(user);
@@ -549,6 +558,7 @@ public class PlayerManager {
         player.sendInventory();
         sendPlayerPosition(user, player);
         sendStartWaitingForChunks(user);
+        sendOpLevel(user, player);
         synchronizePlayerVisibility(player);
 
         sendInitialChunks(player);
@@ -685,6 +695,14 @@ public class PlayerManager {
         send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChangeGameState(reason,value));
     }
 
+    private void sendOpLevel(User user, ServerPlayer player) {
+        // F3+F4 gamemode switcher and F3+N spectator toggle require op permission level.
+        // Vanilla sends EntityStatus with 24+level: 24=0, 25=1, 26=2 (WORLD_COMMANDS), 27=3, 28=4 (ADMIN).
+        // We grant level 4 (28) to all players so F3+F4 works without real op.
+        send(user, new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityStatus(
+                player.getEntityId(), 28));
+    }
+
 
     private static void send(User user,com.github.retrooper.packetevents.wrapper.PacketWrapper<?> packet){user.sendPacket(packet);}
     private static com.github.retrooper.packetevents.protocol.world.Location location(ServerPlayer p){return new com.github.retrooper.packetevents.protocol.world.Location(p.getX(),p.getY(),p.getZ(),p.getYaw(),p.getPitch());}
@@ -693,13 +711,34 @@ public class PlayerManager {
     private static com.github.retrooper.packetevents.protocol.world.Difficulty difficulty(){return com.github.retrooper.packetevents.protocol.world.Difficulty.valueOf(VibMC.getInstance().getConfig().difficulty().toUpperCase(java.util.Locale.ROOT));}
     private static byte[] brandData(){byte[] text="vib-MC".getBytes(java.nio.charset.StandardCharsets.UTF_8);byte[] data=new byte[text.length+1];data[0]=(byte)text.length;System.arraycopy(text,0,data,1,text.length);return data;}
     private static com.github.retrooper.packetevents.protocol.world.dimension.DimensionType dimension(ServerPlayer p){
+        com.github.retrooper.packetevents.protocol.player.ClientVersion version = p.getUser().getClientVersion();
         switch(p.getWorld().environment()){
             case NETHER:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.THE_NETHER;
-            case END:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.THE_END_PRE_1_21_9;
+            case END:
+                if (version.isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_21_9)) {
+                    return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.THE_END;
+                } else {
+                    return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.THE_END_PRE_1_21_9;
+                }
             // vib-MC intentionally keeps the classic 0..255 build range on modern clients.
-            default:return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD_PRE_1_18;
+            // Use version-appropriate overworld type, but RegistryDataCodec forces min_y=0 height=256.
+            default:
+                if (version.isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_18)) {
+                    return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD;
+                } else {
+                    return com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes.OVERWORLD_PRE_1_18;
+                }
         }
     }
-    private static void sendJoin(User user,ServerPlayer p){com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec=user.getClientVersion().isNewerThanOrEquals(com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)?new com.github.retrooper.packetevents.protocol.nbt.NBTCompound():net.vibmc.registry.MinecraftDataRegistryCodec.create(user.getClientVersion());java.util.List<String> worlds=java.util.Collections.singletonList(p.getWorld().name());send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));}
+    private static void sendJoin(User user,ServerPlayer p){
+        com.github.retrooper.packetevents.protocol.nbt.NBTCompound codec = user.getClientVersion().isNewerThanOrEquals(
+                com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_20_2)
+                ? new com.github.retrooper.packetevents.protocol.nbt.NBTCompound()
+                : net.vibmc.registry.RegistryDataCodec.create(user.getClientVersion());
+        java.util.List<String> worlds = java.util.Collections.singletonList(p.getWorld().name());
+        send(user,new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJoinGame(
+                p.getEntityId(),false,mode(p),null,worlds,codec,dimension(p),difficulty(),
+                p.getWorld().name(),0L,VibMC.getInstance().getConfig().getMaxPlayers(),8,8,false,true,false,false,null,null));
+    }
 
 }

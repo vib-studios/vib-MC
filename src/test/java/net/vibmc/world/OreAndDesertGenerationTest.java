@@ -1,5 +1,6 @@
 package net.vibmc.world;
 
+import com.github.retrooper.packetevents.protocol.world.biome.Biomes;
 import net.vibmc.world.gen.OreGenerator;
 import net.vibmc.world.gen.TerrainGenerator;
 import org.junit.jupiter.api.Test;
@@ -87,7 +88,7 @@ class OreAndDesertGenerationTest {
         for (int chunkX = 0; chunkX < 24 && cacti == 0; chunkX++) {
             for (int chunkZ = 0; chunkZ < 24 && cacti == 0; chunkZ++) {
                 // Only generate chunks whose centre is desert, so the test stays quick.
-                if (!"minecraft:desert".equals(world.biomeAt(chunkX * 16 + 8, chunkZ * 16 + 8))) continue;
+                if (!Biomes.DESERT.equals(world.biomeAt(chunkX * 16 + 8, chunkZ * 16 + 8))) continue;
                 checkedChunks++;
                 WorldChunk chunk = world.getChunk(chunkX, chunkZ);
                 for (int x = 0; x < 16; x++) {
@@ -112,11 +113,11 @@ class OreAndDesertGenerationTest {
         World world = new World(2024L, "no-cactus-test");
         for (int chunkX = 0; chunkX < 6; chunkX++) {
             for (int chunkZ = 0; chunkZ < 6; chunkZ++) {
-                if ("minecraft:desert".equals(world.biomeAt(chunkX * 16 + 8, chunkZ * 16 + 8))) continue;
+                if (Biomes.DESERT.equals(world.biomeAt(chunkX * 16 + 8, chunkZ * 16 + 8))) continue;
                 WorldChunk chunk = world.getChunk(chunkX, chunkZ);
                 for (int x = 0; x < 16; x++) {
                     for (int z = 0; z < 16; z++) {
-                        if (!"minecraft:desert".equals(world.biomeAt(chunkX * 16 + x, chunkZ * 16 + z))) {
+                        if (!Biomes.DESERT.equals(world.biomeAt(chunkX * 16 + x, chunkZ * 16 + z))) {
                             for (int y = 0; y < 256; y++) {
                                 assertTrue(!Blocks.same(chunk.getBlock(x, y, z), Blocks.CACTUS),
                                         "cacti must not generate outside desert biomes");

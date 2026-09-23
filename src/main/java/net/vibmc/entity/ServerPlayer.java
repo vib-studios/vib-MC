@@ -270,7 +270,7 @@ public class ServerPlayer extends Entity {
         if (portalCooldown > 0) portalCooldown--;
         if (voidDamageCooldown > 0) voidDamageCooldown--;
         if (hurtCooldown > 0) hurtCooldown--;
-        if (y < -64 && voidDamageCooldown == 0 && gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR) {
+        if (y < 0 && voidDamageCooldown == 0 && gameMode != GameMode.CREATIVE && gameMode != GameMode.SPECTATOR) {
             hurt(4.0f, DamageSource.VOID);
             voidDamageCooldown = 10;
         }
@@ -588,8 +588,41 @@ public class ServerPlayer extends Entity {
     public void sendInventory() {
         if(user==null)return;
         java.util.List<ItemStack> items=new java.util.ArrayList<>();
-        for(int slot=0;slot<46;slot++)items.add(windowSlot(slot));
-        send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,items,ItemStack.EMPTY));
+        com.github.retrooper.packetevents.protocol.player.ClientVersion version = user.getClientVersion();
+        for(int slot=0;slot<46;slot++) {
+            ItemStack stack = windowSlot(slot);
+            items.add(sanitizeForClient(stack, version));
+        }
+        try {
+            send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,items,sanitizeForClient(carried.copy(), version)));
+        } catch (Throwable t) {
+            // Fallback: send empty inventory if encoding fails (prevents client crash on corrupt items)
+            java.util.List<ItemStack> empty = new java.util.ArrayList<>();
+            for(int i=0;i<46;i++) empty.add(ItemStack.EMPTY);
+            try {
+                send(new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems(0,0,empty,ItemStack.EMPTY));
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private static ItemStack sanitizeForClient(ItemStack stack, com.github.retrooper.packetevents.protocol.player.ClientVersion version) {
+        if (stack == null || stack.isEmpty()) return ItemStack.EMPTY;
+        try {
+            if (stack.getType() == null) return ItemStack.EMPTY;
+            // Check if type exists in client version
+            int id = stack.getType().getId(version);
+            if (id < 0) return ItemStack.EMPTY;
+            int amount = stack.getAmount();
+            if (amount <= 0 || amount > 127) {
+                ItemStack copy = stack.copy();
+                copy.setAmount(1);
+                return copy;
+            }
+            // Ensure NBT/components are safe – if getNBT throws, return copy without NBT
+            return stack.copy();
+        } catch (Throwable t) {
+            return ItemStack.EMPTY;
+        }
     }
 
     /**

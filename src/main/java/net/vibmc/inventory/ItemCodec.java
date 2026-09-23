@@ -71,7 +71,7 @@ public final class ItemCodec {
             }
         }
         ItemStack item = ItemStack.builder().type(type).amount(amount).nbt(tag)
-                .version(ClientVersion.V_1_12_2).build();
+                .version(com.github.retrooper.packetevents.protocol.player.ClientVersion.getLatest()).build();
         item.setDamageValue(damage);
         return item;
     }

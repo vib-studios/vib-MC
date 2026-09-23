@@ -10,7 +10,7 @@ import net.vibmc.entity.ServerPlayer;
 import net.vibmc.network.ProtocolState;
 import net.vibmc.network.packetevents.PacketEventsTags;
 import net.vibmc.network.packetevents.WrapperConfigServerUpdateTags;
-import net.vibmc.registry.MinecraftDataRegistryCodec;
+import net.vibmc.registry.RegistryDataCodec;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -34,7 +34,7 @@ public final class ConfigurationHandler implements PacketHandler {
         connection.getUser().sendPacket(new WrapperConfigServerPluginMessage("minecraft:brand",brandData()));
         connection.getUser().sendPacket(new WrapperConfigServerUpdateEnabledFeatures(
                 Collections.singleton(ResourceLocation.minecraft("vanilla"))));
-        if(MinecraftDataRegistryCodec.usesSplitRegistries(version)){
+        if(RegistryDataCodec.usesSplitRegistries(version)){
             waitingForKnownPacks=true;
             // We do not omit any registry entries, so there is no need to negotiate a built-in
             // pack. The response is still a required synchronization point in this format.
@@ -51,19 +51,19 @@ public final class ConfigurationHandler implements PacketHandler {
 
     private void sendRegistriesAndFinish(ServerPlayer connection,ClientVersion version){
         if(registriesSent)return;registriesSent=true;
-        if(MinecraftDataRegistryCodec.usesSplitRegistries(version)){
+        if(RegistryDataCodec.usesSplitRegistries(version)){
             for(java.util.Map.Entry<ResourceLocation,java.util.List<WrapperConfigServerRegistryData.RegistryElement>> registry:
-                    MinecraftDataRegistryCodec.splitRegistries(version).entrySet()){
+                    RegistryDataCodec.splitRegistries(version).entrySet()){
                 connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
                         registry.getKey(),registry.getValue()));
             }
         }else{
             connection.getUser().sendPacket(new WrapperConfigServerRegistryData(
-                    MinecraftDataRegistryCodec.create(version)));
+                    RegistryDataCodec.create(version)));
         }
         connection.getUser().sendPacket(new WrapperConfigServerUpdateTags(PacketEventsTags.tagMap(
-                version,MinecraftDataRegistryCodec.referencedTags(version),
-                MinecraftDataRegistryCodec.referencedTagsByRegistry(version))));
+                version,RegistryDataCodec.referencedTags(version),
+                RegistryDataCodec.referencedTagsByRegistry(version))));
         // PacketEvents changes the outbound state to PLAY while serializing this packet.
         connection.getUser().sendPacket(new WrapperConfigServerConfigurationEnd());
     }

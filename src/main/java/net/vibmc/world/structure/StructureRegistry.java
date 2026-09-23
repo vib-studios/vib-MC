@@ -52,7 +52,7 @@ public final class StructureRegistry {
             for(int cellX=firstCellX;cellX<=lastCellX;cellX++)for(int cellZ=firstCellZ;cellZ<=lastCellZ;cellZ++){
                 int hash=terrain.hash(cellX+template.salt(),cellZ-template.salt());if((hash&0xffff)/65535.0>template.chance())continue;
                 int originX=cellX*spacing+Math.floorMod(hash>>>8,spacing),originZ=cellZ*spacing+Math.floorMod(hash>>>16,spacing);
-                int anchorX=originX+template.anchorX(),anchorZ=originZ+template.anchorZ();String biome=world.biomeAt(anchorX,anchorZ);if(!template.allows(biome))continue;
+                int anchorX=originX+template.anchorX(),anchorZ=originZ+template.anchorZ();String biome=world.biomeAtName(anchorX,anchorZ);if(!template.allows(biome))continue;
                 int ground=terrain.getHeight(anchorX,anchorZ);if(world.environment()==WorldEnvironment.OVERWORLD&&ground<=63)continue;
                 if(intersectsExclusion(world,template.name(),originX,originZ,template.sizeX(),template.sizeZ()))continue;
                 place(chunk,terrain,template,originX,ground+1,originZ,0,false);

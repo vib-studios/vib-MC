@@ -48,8 +48,8 @@ class PacketEventsTagsTest {
     void oneTwentyOneElevenBindsDynamicRegistryLocalTags(){
         ClientVersion version=ClientVersion.V_1_21_11;
         Map<ResourceLocation,List<WrapperPlayServerTags.Tag>> registries=PacketEventsTags.tagMap(
-                version,net.vibmc.registry.MinecraftDataRegistryCodec.referencedTags(version),
-                net.vibmc.registry.MinecraftDataRegistryCodec.referencedTagsByRegistry(version));
+                version,net.vibmc.registry.RegistryDataCodec.referencedTags(version),
+                net.vibmc.registry.RegistryDataCodec.referencedTagsByRegistry(version));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:dialog")),
                 "minecraft:pause_screen_additions"));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:dialog")),
@@ -63,11 +63,13 @@ class PacketEventsTagsTest {
     }
 
     @Test
-    void twentySixOneBindsRequiredFireDamageTypeTag(){
+    void twentySixOneBindsRequiredTags(){
         ClientVersion version=ClientVersion.V_26_1;
         Map<ResourceLocation,List<WrapperPlayServerTags.Tag>> registries=PacketEventsTags.tagMap(
-                version,net.vibmc.registry.MinecraftDataRegistryCodec.referencedTags(version),
-                net.vibmc.registry.MinecraftDataRegistryCodec.referencedTagsByRegistry(version));
+                version,net.vibmc.registry.RegistryDataCodec.referencedTags(version),
+                net.vibmc.registry.RegistryDataCodec.referencedTagsByRegistry(version));
+        // Damage type tags should be present via referencedTags scanning (fire, explosion, etc.)
+        // They may be empty placeholders if not resolved via PE, but should exist
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:damage_type")),
                 "minecraft:is_fire"));
         assertNotNull(find(registries.get(new ResourceLocation("minecraft:damage_type")),
@@ -76,6 +78,7 @@ class PacketEventsTagsTest {
                 "minecraft:bypasses_shield"));
         List<WrapperPlayServerTags.Tag> bannerPatterns=registries.get(
                 new ResourceLocation("minecraft:banner_pattern"));
+        assertNotNull(bannerPatterns);
         for(String tag:new String[]{"no_item_required","pattern_item/bordure_indented",
                 "pattern_item/creeper","pattern_item/field_masoned","pattern_item/flow",
                 "pattern_item/flower","pattern_item/globe","pattern_item/guster",
@@ -94,5 +97,12 @@ class PacketEventsTagsTest {
     void legacyClientsDoNotHaveATagsPacket() {
         assertThrows(IllegalArgumentException.class,
                 ()->PacketEventsTags.create(ClientVersion.V_1_12_2));
+    }
+
+    @Test
+    void usesGetByNameInsteadOfReflection() {
+        // Verify that getByName works for block and item tags (the replacement for reflection)
+        assertNotNull(com.github.retrooper.packetevents.protocol.world.states.defaulttags.BlockTags.getByName("wool"));
+        assertNotNull(com.github.retrooper.packetevents.protocol.world.states.defaulttags.ItemTags.WOOL.getByName("wool"));
     }
 }
