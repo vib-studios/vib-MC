@@ -373,6 +373,36 @@ public final class RegistryDataCodec {
             } catch (Throwable ignored) {}
         }
 
+        if (version.isNewerThanOrEquals(ClientVersion.V_26_3)) {
+            try {
+                NBTCompound root = ViaMappings.get().loadNbt("block-transformer-registry-26.3.nbt");
+                List<WrapperConfigServerRegistryData.RegistryElement> list = new ArrayList<>();
+                List<Map.Entry<String, NBT>> entries = new ArrayList<>(root.getTags().entrySet());
+                entries.sort(Map.Entry.comparingByKey());
+                for (Map.Entry<String, NBT> e : entries) {
+                    list.add(new WrapperConfigServerRegistryData.RegistryElement(
+                            new ResourceLocation(e.getKey()), e.getValue().copy()));
+                }
+                if (!list.isEmpty()) {
+                    out.put(new ResourceLocation("minecraft:block_transformer"), Collections.unmodifiableList(list));
+                }
+            } catch (Throwable ignored) {}
+
+            try {
+                NBTCompound root = ViaMappings.get().loadNbt("decorated-pot-pattern-registry-26.3.nbt");
+                List<WrapperConfigServerRegistryData.RegistryElement> list = new ArrayList<>();
+                List<Map.Entry<String, NBT>> entries = new ArrayList<>(root.getTags().entrySet());
+                entries.sort(Map.Entry.comparingByKey());
+                for (Map.Entry<String, NBT> e : entries) {
+                    list.add(new WrapperConfigServerRegistryData.RegistryElement(
+                            new ResourceLocation(e.getKey()), e.getValue().copy()));
+                }
+                if (!list.isEmpty()) {
+                    out.put(new ResourceLocation("minecraft:decorated_pot_pattern"), Collections.unmodifiableList(list));
+                }
+            } catch (Throwable ignored) {}
+        }
+
     }
 
     // ---- safe encoders ----
