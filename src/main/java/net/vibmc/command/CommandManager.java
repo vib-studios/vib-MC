@@ -10,10 +10,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Scanner;
 
-public class CommandManager {
+public final class CommandManager {
     private final Map<String, Command> commands;
     private Thread consoleThread;
 
+    @SuppressWarnings("this-escape")
     public CommandManager() {
         this.commands = new LinkedHashMap<>();
         registerDefaults();

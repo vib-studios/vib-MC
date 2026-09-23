@@ -22,7 +22,7 @@ public class World {
     private final WeatherSystem weatherSystem;
     private final WorldStorage storage;
     private final WorldEnvironment environment;
-    private final BlockUpdates blockUpdates = new BlockUpdates(this);
+    private final BlockUpdates blockUpdates;
     private final BlockEntities blockEntities = new BlockEntities();
     private final List<Entity> entities = new CopyOnWriteArrayList<>();
     private volatile long worldTime;
@@ -35,6 +35,7 @@ public class World {
         this(seed, name, storage, WorldEnvironment.OVERWORLD);
     }
 
+    @SuppressWarnings("this-escape")
     public World(long seed, String name, WorldStorage storage, WorldEnvironment environment) {
         this.seed = seed;
         this.name = name;
@@ -43,6 +44,7 @@ public class World {
         this.timeSystem = new TimeSystem();
         this.weatherSystem = new WeatherSystem();
         this.chunkManager = new ChunkManager(this, storage);
+        this.blockUpdates = new BlockUpdates(this);
     }
 
     public WorldChunk chunk(int chunkX, int chunkZ) {

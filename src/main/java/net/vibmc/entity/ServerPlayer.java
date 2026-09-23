@@ -48,7 +48,7 @@ public class ServerPlayer extends Entity {
     private int nextTeleportId;
     private int pendingTeleportId=-1;
     private UUID cameraTargetUuid;
-    private final PlayerVitals vitals = new PlayerVitals(this);
+    private final PlayerVitals vitals;
     private final ItemStack[] armor = new ItemStack[net.vibmc.inventory.Armor.SLOTS];
     private ItemStack offhand = ItemStack.EMPTY;
     private int hurtCooldown;
@@ -65,6 +65,7 @@ public class ServerPlayer extends Entity {
         this(null,user,null,null);
     }
 
+    @SuppressWarnings("this-escape")
     public ServerPlayer(World world, User user, String username, UUID uuid) {
         super(world, uuid);
         this.user = user;
@@ -78,6 +79,7 @@ public class ServerPlayer extends Entity {
         this.y = 0;
         this.z = 8.5;
         java.util.Arrays.fill(armor, ItemStack.EMPTY);
+        this.vitals = new PlayerVitals(this);
     }
 
     public Channel channel(){return (Channel)user.getChannel();}

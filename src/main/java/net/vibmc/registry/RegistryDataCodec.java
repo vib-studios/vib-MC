@@ -171,7 +171,7 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:dimension_type",
                     DimensionTypes.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeDimensionSafe(wrapper, (DimensionType) value));
+                    (wrapper, value) -> encodeDimensionSafe(wrapper, value));
             putRegistry(out, "minecraft:worldgen/biome",
                     com.github.retrooper.packetevents.protocol.world.biome.Biomes.getRegistry(),
                     version,
@@ -190,7 +190,7 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:damage_type",
                     DamageTypes.getRegistry(),
                     version,
-                    (wrapper, value) -> DamageType.DIRECT_CODEC.encode(wrapper, (DamageType) value));
+                    (wrapper, value) -> DamageType.DIRECT_CODEC.encode(wrapper, value));
             putRegistry(out, "minecraft:trim_material",
                     com.github.retrooper.packetevents.protocol.item.trimmaterial.TrimMaterials.getRegistry(),
                     version,
@@ -216,7 +216,7 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:enchantment",
                     com.github.retrooper.packetevents.protocol.item.enchantment.type.EnchantmentTypes.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeEnchantmentSafe(wrapper, (EnchantmentType) value));
+                    (wrapper, value) -> encodeEnchantmentSafe(wrapper, value));
             putRegistry(out, "minecraft:jukebox_song",
                     com.github.retrooper.packetevents.protocol.item.jukebox.JukeboxSongs.getRegistry(),
                     version,
@@ -239,19 +239,19 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:cat_variant",
                     com.github.retrooper.packetevents.protocol.entity.cat.CatVariants.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeCatVariantSafe(wrapper, (CatVariant) value));
+                    (wrapper, value) -> encodeCatVariantSafe(wrapper, value));
             putRegistryWithCodec(out, "minecraft:chicken_variant",
                     com.github.retrooper.packetevents.protocol.entity.chicken.ChickenVariants.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeChickenVariantSafe(wrapper, (ChickenVariant) value));
+                    (wrapper, value) -> encodeChickenVariantSafe(wrapper, value));
             putRegistryWithCodec(out, "minecraft:cow_variant",
                     com.github.retrooper.packetevents.protocol.entity.cow.CowVariants.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeCowVariantSafe(wrapper, (CowVariant) value));
+                    (wrapper, value) -> encodeCowVariantSafe(wrapper, value));
             putRegistryWithCodec(out, "minecraft:pig_variant",
                     com.github.retrooper.packetevents.protocol.entity.pig.PigVariants.getRegistry(),
                     version,
-                    (wrapper, value) -> encodePigVariantSafe(wrapper, (PigVariant) value));
+                    (wrapper, value) -> encodePigVariantSafe(wrapper, value));
 
             putRegistry(out, "minecraft:frog_variant",
                     com.github.retrooper.packetevents.protocol.entity.frog.FrogVariants.getRegistry(),
@@ -269,7 +269,7 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:dialog",
                     com.github.retrooper.packetevents.protocol.dialog.Dialogs.getRegistry(),
                     version,
-                    (wrapper, value) -> encodeDialogSafe(wrapper, (Dialog) value));
+                    (wrapper, value) -> encodeDialogSafe(wrapper, value));
 
             try {
                 Map<String, NBTCompound> timelineEntries = ViaMappings.get().loadTimelineRegistry();
@@ -361,7 +361,7 @@ public final class RegistryDataCodec {
             putRegistryWithCodec(out, "minecraft:world_clock",
                     WorldClocks.getRegistry(),
                     version,
-                    (wrapper, value) -> WorldClock.DIRECT_CODEC.encode(wrapper, (WorldClock) value));
+                    (wrapper, value) -> WorldClock.DIRECT_CODEC.encode(wrapper, value));
         }
 
         if (version.isNewerThanOrEquals(ClientVersion.V_26_2)) {
