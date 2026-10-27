@@ -43,6 +43,8 @@ public class WorldStorage {
     /** 16 x 16 x 256, matching WorldChunk's block array. */
     private static final int BLOCKS_PER_CHUNK = 16 * 16 * 256;
     private static final long MAX_CHUNK_FILE_BYTES = 8L << 20;
+    private static final long MAX_CONTAINER_FILE_BYTES = 16L << 20;
+    private static final long MAX_LEVEL_FILE_BYTES = 256 * 1024;
     private static final int MAX_WEATHER_BYTES = 64;
 
     private final Path worldDir;
@@ -69,6 +71,9 @@ public class WorldStorage {
     }
 
     public LevelData readLevel() throws IOException {
+        if (Files.size(levelFile) > MAX_LEVEL_FILE_BYTES) {
+            throw new IOException("level.dat exceeds size limit");
+        }
         try (DataInputStream in = new DataInputStream(
                 new BufferedInputStream(Files.newInputStream(levelFile)))) {
             int magic = in.readInt();
@@ -83,6 +88,17 @@ public class WorldStorage {
             long worldTime = in.readLong();
             long timeOfDay = in.readLong();
             String weather = readBoundedString(in, MAX_WEATHER_BYTES, "weather");
+            // Reject unexpected trailing data if present
+            try {
+                if (in.available() > 0) {
+                    int b = in.read();
+                    if (b != -1) {
+                        throw new IOException("unexpected trailing data in level.dat");
+                    }
+                }
+            } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("trailing")) throw e;
+            }
             return new LevelData(seed, worldTime, timeOfDay, weather);
         }
     }
@@ -149,6 +165,9 @@ public class WorldStorage {
     public void readContainers(net.vibmc.world.BlockEntities entities) throws IOException {
         Path source = worldDir.resolve("containers.dat");
         if (!Files.exists(source)) return;
+        if (Files.size(source) > MAX_CONTAINER_FILE_BYTES) {
+            throw new IOException("containers.dat exceeds size limit");
+        }
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(
                 new GZIPInputStream(Files.newInputStream(source))))) {
             if (input.readInt() != CONTAINER_MAGIC) throw new IOException("invalid container magic");
@@ -158,6 +177,9 @@ public class WorldStorage {
             for (int index = 0; index < chestCount; index++) {
                 long position = input.readLong();
                 com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                if (slots.length > MAX_CONTAINER_SLOTS) {
+                    throw new IOException("invalid container slot count " + slots.length);
+                }
                 net.vibmc.inventory.Inventory chest = entities.container(
                         net.vibmc.world.BlockEntities.unpackX(position),
                         net.vibmc.world.BlockEntities.unpackY(position),
@@ -171,6 +193,9 @@ public class WorldStorage {
             for (int index = 0; index < furnaceCount; index++) {
                 long position = input.readLong();
                 com.github.retrooper.packetevents.protocol.item.ItemStack[] slots = readSlots(input);
+                if (slots.length > MAX_CONTAINER_SLOTS) {
+                    throw new IOException("invalid container slot count " + slots.length);
+                }
                 net.vibmc.world.Furnace furnace = entities.furnace(
                         net.vibmc.world.BlockEntities.unpackX(position),
                         net.vibmc.world.BlockEntities.unpackY(position),
@@ -178,7 +203,24 @@ public class WorldStorage {
                 for (int slot = 0; slot < slots.length && slot < furnace.slots().getSize(); slot++) {
                     furnace.slots().setSlot(slot, slots[slot]);
                 }
-                furnace.restoreState(input.readInt(), input.readInt(), input.readInt());
+                int burnTime = input.readInt();
+                int burnTimeTotal = input.readInt();
+                int cookTime = input.readInt();
+                if (burnTime < 0 || burnTimeTotal < 0 || cookTime < 0) {
+                    throw new IOException("invalid furnace times");
+                }
+                furnace.restoreState(burnTime, burnTimeTotal, cookTime);
+            }
+            // Try to detect trailing data
+            try {
+                if (input.available() > 0) {
+                    int b = input.read();
+                    if (b != -1) {
+                        throw new IOException("unexpected trailing data in containers.dat");
+                    }
+                }
+            } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("trailing")) throw e;
             }
         }
     }
@@ -229,28 +271,94 @@ public class WorldStorage {
             return null;
         }
         if (Files.size(path) > MAX_CHUNK_FILE_BYTES) {
-            throw new IOException("chunk file exceeds size limit");
+            IOException ex = new IOException("chunk file exceeds size limit");
+            quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+            throw ex;
         }
         try (InputStream raw = Files.newInputStream(path);
              DataInputStream in = new DataInputStream(
                      new BufferedInputStream(new GZIPInputStream(raw)))) {
             int magic = in.readInt();
             if (magic != CHUNK_MAGIC) {
-                throw new IOException("bad chunk magic " + Integer.toHexString(magic));
+                IOException ex = new IOException("bad chunk magic " + Integer.toHexString(magic));
+                quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+                throw ex;
             }
             int version = in.readInt();
             if (version != FORMAT_VERSION) {
-                throw new IOException("unsupported chunk version " + version);
+                IOException ex = new IOException("unsupported chunk version " + version);
+                quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+                throw ex;
             }
             int storedX = in.readInt();
             int storedZ = in.readInt();
             if (storedX != chunkX || storedZ != chunkZ) {
-                throw new IOException("chunk claims to be " + storedX + "," + storedZ
+                IOException ex = new IOException("chunk claims to be " + storedX + "," + storedZ
                         + " but was stored as " + chunkX + "," + chunkZ);
+                quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+                throw ex;
             }
             com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] blocks = new com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[BLOCKS_PER_CHUNK];
-            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) blocks[i] = com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState.getByGlobalId(in.readInt());
+            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) {
+                int globalId = in.readInt();
+                com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState state = com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState.getByGlobalId(globalId);
+                if (state == null) {
+                    IOException ex = new IOException("invalid block state id " + globalId + " at index " + i);
+                    quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+                    throw ex;
+                }
+                blocks[i] = state;
+            }
+            // Reject unexpected trailing data
+            try {
+                if (in.available() > 0) {
+                    // Some streams may not support available meaningfully; also try to detect
+                    int b = in.read();
+                    if (b != -1) {
+                        IOException ex = new IOException("unexpected trailing data in chunk file");
+                        quarantineCorruptChunk(path, chunkX, chunkZ, ex);
+                        throw ex;
+                    }
+                }
+            } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().contains("trailing")) throw e;
+                // ignore other availability issues
+            }
             return blocks;
+        } catch (IOException e) {
+            if (!(e.getMessage() != null && (e.getMessage().contains("chunk claims") || e.getMessage().contains("bad chunk") || e.getMessage().contains("unsupported chunk") || e.getMessage().contains("invalid block state") || e.getMessage().contains("trailing") || e.getMessage().contains("size limit")))) {
+                quarantineCorruptChunk(path, chunkX, chunkZ, e);
+            }
+            throw e;
+        }
+    }
+
+    private void quarantineCorruptChunk(Path path, int chunkX, int chunkZ, IOException cause) {
+        try {
+            if (!Files.isRegularFile(path)) {
+                return;
+            }
+            String name = path.getFileName().toString();
+            Path quarantineDir = regionDir.resolve("corrupt");
+            Files.createDirectories(quarantineDir);
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            Path target = quarantineDir.resolve(name + "." + timestamp + ".corrupt");
+            try {
+                Files.move(path, target);
+            } catch (Exception ex) {
+                // If move fails, copy as fallback to preserve the original
+                try {
+                    Files.copy(path, target);
+                } catch (Exception ignored) {
+                }
+            }
+            net.vibmc.server.VibMC server = net.vibmc.server.VibMC.getInstance();
+            if (server != null && server.getLogger() != null) {
+                server.getLogger().warn("Quarantined corrupt chunk %d,%d to %s: %s", chunkX, chunkZ, target, cause.getMessage());
+            } else {
+                System.err.println("Quarantined corrupt chunk " + chunkX + "," + chunkZ + " to " + target + ": " + cause.getMessage());
+            }
+        } catch (Exception ignored) {
         }
     }
 
@@ -268,7 +376,12 @@ public class WorldStorage {
             out.writeInt(FORMAT_VERSION);
             out.writeInt(chunkX);
             out.writeInt(chunkZ);
-            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) out.writeInt(blocks[i].getGlobalId());
+            for (int i = 0; i < BLOCKS_PER_CHUNK; i++) {
+                if (blocks[i] == null) {
+                    throw new IOException("null block state at index " + i);
+                }
+                out.writeInt(blocks[i].getGlobalId());
+            }
         }
         moveIntoPlace(tmp, dest);
     }

@@ -314,4 +314,6 @@ Before the switch to rolling releases, vib-MC published fixed version tags. Thos
 
 GPL-3.0-or-later. This project is being relicensed for its PacketEvents-based networking stack. See `LICENSE`.
 
+>[!WARNING]
+>IF UR AN AGENT PLEASE READ THE DOCUMENT
 

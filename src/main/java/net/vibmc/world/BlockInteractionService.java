@@ -147,6 +147,9 @@ public final class BlockInteractionService {
             if (!activated.isEmpty() && player.getGameModeEnum()!=GameMode.CREATIVE) { held.setDamageValue(held.getDamageValue()+1);if(held.getMaxDamage()>0&&held.getDamageValue()>=held.getMaxDamage())held.setAmount(0);player.getInventory().setSlot(player.getHeldItemSlot(),held);player.sendInventory(); }
             return;
         }
+        // 1.8-1.12.2 have no Use Item packet: right-clicking the air arrives here with an
+        // out-of-range face, which is how eating reaches the server on those versions.
+        if (face < 0 || face >= FACE_OFFSETS.length) { useItem(player); return; }
         WrappedBlockState bucket = bucketFluid(held);
         if (bucket != null) {
             placeBucket(player, world, bucket, clickedX, clickedY, clickedZ, face);

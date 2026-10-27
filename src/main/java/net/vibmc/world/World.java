@@ -184,10 +184,34 @@ public class World {
         if (radius < 0) {
             throw new IllegalArgumentException("radius cannot be negative");
         }
-        int[] near = scanDrySpawn(x, z, radius);
+        // Bound work to avoid excessive chunk generation/loading
+        int boundedRadius = Math.min(radius, 128);
+        int[] near = scanDrySpawn(x, z, boundedRadius);
         if (near != null) return near;
-        int[] far = projectDrySpawn(x, z, radius);
+        int[] far = projectDrySpawn(x, z, boundedRadius);
         if (far != null) return far;
+        // Deterministic safe fallback if no suitable natural terrain is found
+        if (environment == WorldEnvironment.OVERWORLD) {
+            int platformY = createDryPlatform(x, z);
+            // Ensure we return a valid column
+            if (isDryStandingColumn(x, z)) {
+                return new int[]{x, z};
+            }
+            // Try nearby columns created by platform
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (isDryStandingColumn(x + dx, z + dz)) {
+                        return new int[]{x + dx, z + dz};
+                    }
+                }
+            }
+            return new int[]{x, z};
+        }
+        // For other dimensions, try to find any safe column or return origin
+        int safe = findSafeSpawnY(x, z);
+        if (safe >= 0 && safe < 256) {
+            return new int[]{x, z};
+        }
         return new int[]{x, z};
     }
 

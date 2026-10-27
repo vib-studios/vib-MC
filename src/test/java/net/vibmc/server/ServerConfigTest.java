@@ -35,6 +35,7 @@ class ServerConfigTest {
         assertEquals(25565, config.port());
         assertEquals(4, config.getViewDistance());
         assertEquals(null, config.configuredSeed());
+        assertTrue(config.onlineMode(), "default should be safe authenticated mode");
     }
 
     @Test
@@ -65,7 +66,7 @@ class ServerConfigTest {
         assertEquals(25565, config.port());
         assertEquals(20, config.maxPlayers());
         assertEquals(4, config.getViewDistance());
-        assertFalse(config.onlineMode());
+        assertTrue(config.onlineMode());
         assertEquals((long) "not-a-number".hashCode(), config.seed());
     }
 

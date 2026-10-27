@@ -32,14 +32,25 @@ public final class ChunkManager {
 
     private WorldChunk loadOrGenerate(int chunkX, int chunkZ) {
         try {
+            long start = System.nanoTime();
             com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState[] stored = storage.readChunk(chunkX, chunkZ);
+            long elapsed = System.nanoTime() - start;
+            if (elapsed > 50_000_000L) {
+                warn("Slow chunk read %d,%d took %.2f ms", chunkX, chunkZ, elapsed / 1_000_000.0);
+            }
             if (stored != null) {
                 return WorldChunk.fromStored(world, chunkX, chunkZ, stored);
             }
         } catch (IOException e) {
-            warn("Could not read chunk %d,%d (%s); regenerating it", chunkX, chunkZ, e.getMessage());
+            warn("Could not read chunk %d,%d (%s); regenerating it (corrupted/original preserved via quarantine if applicable)", chunkX, chunkZ, e.getMessage());
         }
-        return WorldChunk.generate(world, chunkX, chunkZ);
+        long genStart = System.nanoTime();
+        WorldChunk generated = WorldChunk.generate(world, chunkX, chunkZ);
+        long genElapsed = System.nanoTime() - genStart;
+        if (genElapsed > 100_000_000L) {
+            warn("Slow chunk generation %d,%d took %.2f ms", chunkX, chunkZ, genElapsed / 1_000_000.0);
+        }
+        return generated;
     }
 
     public List<WorldChunk> listLoadedChunks() {
@@ -58,11 +69,16 @@ public final class ChunkManager {
                 continue;
             }
             try {
+                long start = System.nanoTime();
                 storage.writeChunk(chunk.chunkX(), chunk.chunkZ(), chunk.blocks());
+                long elapsed = System.nanoTime() - start;
+                if (elapsed > 50_000_000L) { // >50ms
+                    warn("Slow chunk save %d,%d took %.2f ms", chunk.chunkX(), chunk.chunkZ(), elapsed / 1_000_000.0);
+                }
                 chunk.markSaved();
                 written++;
             } catch (IOException e) {
-                warn("Failed to save chunk %d,%d: %s", chunk.chunkX(), chunk.chunkZ(), e);
+                warn("Failed to save chunk %d,%d: %s (chunk remains dirty)", chunk.chunkX(), chunk.chunkZ(), e.getMessage());
             }
         }
         return written;

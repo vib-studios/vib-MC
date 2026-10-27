@@ -35,7 +35,18 @@ public class PlayerManager {
         this.playerDataStorage = new PlayerDataStorage(playerDataDirectory);
     }
 
-    public void addPlayer(ServerPlayer player) {
+    public synchronized void addPlayer(ServerPlayer player) {
+        if (player == null || player.getUuid() == null || player.getUsername() == null) {
+            return;
+        }
+        ServerPlayer existingByUuid = players.get(player.getUuid());
+        if (existingByUuid != null && existingByUuid != player) {
+            return;
+        }
+        ServerPlayer existingByName = byName.get(player.getUsername().toLowerCase(Locale.ROOT));
+        if (existingByName != null && existingByName != player) {
+            return;
+        }
         players.put(player.getUuid(), player);
         byName.put(player.getUsername().toLowerCase(Locale.ROOT), player);
 

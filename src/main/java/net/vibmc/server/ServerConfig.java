@@ -100,7 +100,7 @@ public final class ServerConfig {
         defaults.put("max-players", "20");
         defaults.put("max-tick-time", "60000");
         defaults.put("motd", "A vib-MC Server");
-        defaults.put("online-mode", "false");
+        defaults.put("online-mode", "true");
         defaults.put("pvp", "true");
         defaults.put("proxy-mode", "none");
         defaults.put("proxy-trusted-address", "127.0.0.1");
@@ -170,6 +170,12 @@ public final class ServerConfig {
 
     public boolean onlineMode() {
         return getBoolean("online-mode");
+    }
+
+    /** True when the configuration explicitly opted into offline (unauthenticated) mode. */
+    public boolean isExplicitOfflineMode() {
+        String value = getString("online-mode");
+        return "false".equalsIgnoreCase(value);
     }
 
     public boolean allowFlight() {

@@ -10,6 +10,10 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public final class LoginHandler implements PacketHandler {
     /**
@@ -102,6 +106,8 @@ public final class LoginHandler implements PacketHandler {
                 AUTHENTICATION.execute(() -> authenticate(connection, sharedSecret));
             } catch (java.util.concurrent.RejectedExecutionException busy) {
                 connection.disconnect("The server is busy authenticating other players. Try again shortly.");
+            } catch (Exception e) {
+                connection.disconnect("Authentication queue is saturated.");
             }
         } catch (Exception e) {
             connection.disconnect("Failed to enable encryption.");

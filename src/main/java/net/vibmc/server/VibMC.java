@@ -41,6 +41,11 @@ public final class VibMC {
         instance = this;
         this.config = config;
         this.logger = new Logger("vib-MC", config.debug());
+        if (!config.onlineMode()) {
+            logger.warn("Server is running in OFFLINE mode (online-mode=false). "
+                    + "Player identities are NOT authenticated and can be spoofed. "
+                    + "For public servers, set online-mode=true.");
+        }
         if (config.generateStructures()) {
             try {
                 net.vibmc.world.structure.StructureRegistry.reload();
