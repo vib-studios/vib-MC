@@ -147,6 +147,11 @@ public final class BlockInteractionService {
             if (!activated.isEmpty() && player.getGameModeEnum()!=GameMode.CREATIVE) { held.setDamageValue(held.getDamageValue()+1);if(held.getMaxDamage()>0&&held.getDamageValue()>=held.getMaxDamage())held.setAmount(0);player.getInventory().setSlot(player.getHeldItemSlot(),held);player.sendInventory(); }
             return;
         }
+        WrappedBlockState bucket = bucketFluid(held);
+        if (bucket != null) {
+            placeBucket(player, world, bucket, clickedX, clickedY, clickedZ, face);
+            return;
+        }
         WrappedBlockState block = blockFor(held);
         if (Blocks.same(block,Blocks.AIR)) return;
         block = orientForPlacement(block, player, face);
@@ -167,6 +172,33 @@ public final class BlockInteractionService {
                 player.sendInventory();
             }
         }
+    }
+
+    /**
+     * Buckets are not block items, so PacketEvents reports no placed type for them. Map the
+     * two fluid buckets to the source block they create.
+     */
+    private static WrappedBlockState bucketFluid(ItemStack held) {
+        if (held.getType() == ItemTypes.WATER_BUCKET) return Blocks.WATER;
+        if (held.getType() == ItemTypes.LAVA_BUCKET) return Blocks.LAVA;
+        return null;
+    }
+
+    private static void placeBucket(ServerPlayer player, World world, WrappedBlockState fluid,
+                                    int clickedX, int clickedY, int clickedZ, int face) {
+        int[] offset = FACE_OFFSETS[face];
+        int x = clickedX + offset[0];
+        int y = clickedY + offset[1];
+        int z = clickedZ + offset[2];
+        if (y < 0 || y >= 256) return;
+        WrappedBlockState replaced = world.getBlockAt(x, y, z);
+        if (!Blocks.isReplaceable(replaced) || Blocks.isFluid(replaced)) return;
+        if (!world.setBlockAndUpdate(x, y, z, fluid)) return;
+        Effects.blockPlace(world, x, y, z, fluid);
+        if (player.getGameModeEnum() == GameMode.CREATIVE) return;
+        player.getInventory().setSlot(player.getHeldItemSlot(),
+                ItemStack.builder().type(ItemTypes.BUCKET).amount(1).build());
+        player.sendInventory();
     }
 
     /** Right-clicking a chest, crafting table, or furnace opens its window. */

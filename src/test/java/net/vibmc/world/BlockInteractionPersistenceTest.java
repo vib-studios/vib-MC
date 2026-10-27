@@ -85,6 +85,49 @@ class BlockInteractionPersistenceTest {
     }
 
     @Test
+    void waterBucketPlacesSourceThatSpreads() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("water-bucket").toString()),WorldEnvironment.OVERWORLD);
+        int y=90;
+        for(int dx=-3;dx<=3;dx++) for(int dz=-3;dz<=3;dz++) {
+            world.setBlockAt(dx,y-1,dz,Blocks.STONE);
+            world.setBlockAt(dx,y,dz,Blocks.AIR);
+            world.setBlockAt(dx,y+1,dz,Blocks.AIR);
+        }
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,y,0.5);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.WATER_BUCKET).amount(1).build());
+
+        BlockInteractionService.place(player,0,y-1,0,1);
+
+        assertTrue(Blocks.isWater(world.getBlockAt(0,y,0)),"water bucket must place a source block");
+        assertEquals(ItemTypes.BUCKET,player.getInventory().getSlot(0).getType(),
+                "a used bucket must become an empty bucket");
+        for(int tick=1;tick<=40;tick++) world.tick(tick);
+        assertTrue(Blocks.isWater(world.getBlockAt(1,y,0)),
+                "water placed from a bucket must flow into neighbouring air");
+    }
+
+    @Test
+    void lavaBucketPlacesSource() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("lava-bucket").toString()),WorldEnvironment.OVERWORLD);
+        int y=90;
+        for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
+            world.setBlockAt(dx,y-1,dz,Blocks.STONE);
+            world.setBlockAt(dx,y,dz,Blocks.AIR);
+            world.setBlockAt(dx,y+1,dz,Blocks.AIR);
+        }
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,y,0.5);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.LAVA_BUCKET).amount(1).build());
+
+        BlockInteractionService.place(player,0,y-1,0,1);
+
+        assertTrue(Blocks.isLava(world.getBlockAt(0,y,0)),"lava bucket must place a source block");
+        assertEquals(ItemTypes.BUCKET,player.getInventory().getSlot(0).getType(),
+                "a used bucket must become an empty bucket");
+    }
+
+    @Test
     void eyesFillACompletedEndPortalFrame() {
         World world = new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("endportal").toString()),WorldEnvironment.OVERWORLD);
         for(int i=1;i<=3;i++) {
