@@ -140,14 +140,30 @@ public final class VibGameplayPacketListener implements PacketListener {
         }
     }
 
+    /**
+     * The main-thread queue is shared by every connection, so without a per-player cap one
+     * client flooding packets fills it and every other player gets disconnected as well.
+     */
+    private static final int MAX_PENDING_PER_PLAYER = 1024;
+
     private static void submit(ServerPlayer player, Runnable action) {
         VibMC server = VibMC.getInstance();
+        java.util.concurrent.atomic.AtomicInteger pending = player.pendingActions();
+        if (pending.incrementAndGet() > MAX_PENDING_PER_PLAYER) {
+            pending.decrementAndGet();
+            player.disconnect("Too many packets");
+            return;
+        }
         boolean accepted = server.executeOnMainThread(() -> {
+            pending.decrementAndGet();
             if (!player.isOpen() || !player.isInWorld() || player.getUuid() == null
                     || server.getPlayerManager().getPlayer(player.getUuid()) != player) return;
             action.run();
         });
-        if (!accepted) player.disconnect("Server overloaded: too many pending gameplay actions");
+        if (!accepted) {
+            pending.decrementAndGet();
+            player.disconnect("Server overloaded: too many pending gameplay actions");
+        }
     }
 
 }

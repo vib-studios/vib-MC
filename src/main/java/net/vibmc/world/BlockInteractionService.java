@@ -43,7 +43,29 @@ public final class BlockInteractionService {
                 com.github.retrooper.packetevents.protocol.sound.SoundCategory.PLAYER, 0.5f, 1.0f);
     }
 
+    /**
+     * Block packets carry whatever coordinates the client likes. Without this a modified client
+     * could break, place or open containers anywhere in the world, and every probe of an
+     * unvisited position would generate and keep a chunk. Measured from the eyes to the block
+     * centre, with slack over the vanilla reach so lag at the edge is not rejected.
+     */
+    static boolean withinReach(ServerPlayer player, int x, int y, int z) {
+        if (y < 0 || y >= 256) return false;
+        double limit = player.getGameModeEnum() == GameMode.CREATIVE ? 7.0 : 6.0;
+        double dx = x + 0.5 - player.getX();
+        double dy = y + 0.5 - (player.getY() + 1.62);
+        double dz = z + 0.5 - player.getZ();
+        return dx * dx + dy * dy + dz * dz <= limit * limit;
+    }
+
+    /** Spectators and adventure players cannot change blocks, as in vanilla. */
+    private static boolean canModifyBlocks(ServerPlayer player) {
+        GameMode mode = player.getGameModeEnum();
+        return mode != GameMode.SPECTATOR && mode != GameMode.ADVENTURE;
+    }
+
     public static void dig(ServerPlayer player, int status, int x, int y, int z) {
+        if (!canModifyBlocks(player) || !withinReach(player, x, y, z)) return;
         World world = player.getWorld();
         WrappedBlockState existing = world.getBlockAt(x, y, z);
         boolean complete = status == 2 || (status == 0
@@ -52,11 +74,17 @@ public final class BlockInteractionService {
         if (Blocks.same(existing,Blocks.AIR) || Blocks.same(existing,Blocks.BEDROCK)) return;
         if (!world.setBlockAndUpdate(x, y, z, Blocks.AIR)) return;
         Effects.blockBreak(world, x, y, z, existing);
+        // Anyone still looking into this container would otherwise keep a live handle to its
+        // inventory and could take the contents out again after the breaker received them.
+        closeViewers(world, x, y, z);
         // Breaking a container spills nothing (there are no item entities), so hand the
         // contents to the breaker rather than destroying them.
         net.vibmc.inventory.Inventory container = world.blockEntities().remove(x, y, z);
-        if (container != null) for (ItemStack stored : container.getSlots()) {
-            if (!stored.isEmpty()) player.getInventory().addItem(stored);
+        if (container != null) {
+            for (ItemStack stored : container.getSlots()) {
+                if (!stored.isEmpty()) player.getInventory().addItem(stored);
+            }
+            container.clear();
         }
         if (player.getGameModeEnum() == GameMode.CREATIVE) { player.sendInventory(); return; }
         ItemStack held = player.getInventory().getSlot(player.getHeldItemSlot());
@@ -81,11 +109,29 @@ public final class BlockInteractionService {
         player.getInventory().setSlot(player.getHeldItemSlot(), held);
     }
 
+    /** Closes the window of every player who has the container at this position open. */
+    private static void closeViewers(World world, int x, int y, int z) {
+        VibMC server = VibMC.getInstance();
+        if (server == null) return;
+        long position = net.vibmc.world.BlockEntities.pack(x, y, z);
+        for (ServerPlayer viewer : server.getPlayerManager().getOnlinePlayers()) {
+            net.vibmc.inventory.WindowSession window = viewer.getOpenWindow();
+            if (window == null || viewer.getWorld() != world || window.blockPosition() != position) continue;
+            net.vibmc.inventory.WindowService.close(viewer, true);
+        }
+    }
+
     public static void place(ServerPlayer player, int clickedX, int clickedY, int clickedZ, int face) {
         World world = player.getWorld();
-        if (openContainer(player, world, clickedX, clickedY, clickedZ)) return;
+        // 1.8-1.12.2 have no Use Item packet: right-clicking the air arrives here with an
+        // out-of-range face, which is how eating reaches the server on those versions.
+        boolean airClick = face < 0 || face >= FACE_OFFSETS.length;
+        if (!airClick && !withinReach(player, clickedX, clickedY, clickedZ)) return;
+        if (!airClick && openContainer(player, world, clickedX, clickedY, clickedZ)) return;
         ItemStack held = player.getInventory().getSlot(player.getHeldItemSlot());
         if (held.isEmpty()) return;
+        if (airClick) { useItem(player); return; }
+        if (!canModifyBlocks(player)) return;
         if (held.getType() == ItemTypes.ENDER_EYE) {
             List<int[]> activated = PortalDetector.insertEyeAndActivate(world, clickedX, clickedY, clickedZ);
             broadcast(world, clickedX, clickedY, clickedZ, world.getBlockAt(clickedX, clickedY, clickedZ));
@@ -116,6 +162,7 @@ public final class BlockInteractionService {
         int x = clickedX + offset[0];
         int y = clickedY + offset[1];
         int z = clickedZ + offset[2];
+        if (y < 0 || y >= 256) return;
         int playerX=(int)Math.floor(player.getX()),playerZ=(int)Math.floor(player.getZ());
         int feetY=(int)Math.floor(player.getY());
         if(x==playerX&&z==playerZ&&(y==feetY||y==feetY+1))return;
@@ -146,6 +193,7 @@ public final class BlockInteractionService {
         int x = clickedX + offset[0];
         int y = clickedY + offset[1];
         int z = clickedZ + offset[2];
+        if (y < 0 || y >= 256) return;
         WrappedBlockState replaced = world.getBlockAt(x, y, z);
         if (!Blocks.isReplaceable(replaced) || Blocks.isFluid(replaced)) return;
         if (!world.setBlockAndUpdate(x, y, z, fluid)) return;

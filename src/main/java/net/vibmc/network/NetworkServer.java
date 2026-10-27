@@ -48,7 +48,10 @@ public final class NetworkServer {
         connections.put(channel.id(),connection);
         channel.closeFuture().addListener(future->remove(connection,"Connection closed"));
 
-            channel.pipeline().addLast("packet_splitter",new PacketSplitter())
+            // Vanilla's 30 second limit. Without it a socket that connects and never sends a
+            // byte holds its connection and PacketEvents user forever.
+            channel.pipeline().addLast("timeout",new io.netty.handler.timeout.ReadTimeoutHandler(30))
+                    .addLast("packet_splitter",new PacketSplitter())
                     .addLast(PacketEvents.DECODER_NAME,new PacketEventsDecoder(user,connection))
                     .addLast("packet_formatter",new PacketFormatter())
                     .addLast(PacketEvents.ENCODER_NAME,new PacketEventsEncoder(user,connection));

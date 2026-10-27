@@ -12,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class World {
     /** Widest the expanding dry-spawn search will look before building land instead. */
     private static final int MAX_DRY_SPAWN_RADIUS = 4096;
+    private static final int UNLOAD_INTERVAL_TICKS = 600;
 
     private final long seed;
     private final String name;
@@ -62,6 +63,26 @@ public class World {
         for (Entity entity : new ArrayList<>(entities)) {
             entity.tick();
         }
+        if (tick % UNLOAD_INTERVAL_TICKS == 0) unloadDistantChunks();
+    }
+
+    /** Unloads chunks that no player in this world is close enough to see. */
+    void unloadDistantChunks() {
+        net.vibmc.server.VibMC server = net.vibmc.server.VibMC.getInstance();
+        if (server == null) return;
+        int radius = server.getConfig().getViewDistance() + 2;
+        java.util.Set<Long> keep = new java.util.HashSet<>();
+        for (Entity entity : entities) {
+            if (!entity.isPlayer()) continue;
+            int centerX = Math.floorDiv((int) Math.floor(entity.getX()), 16);
+            int centerZ = Math.floorDiv((int) Math.floor(entity.getZ()), 16);
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    keep.add(ChunkManager.chunkKey(centerX + dx, centerZ + dz));
+                }
+            }
+        }
+        chunkManager.unloadExcept(keep::contains, server.isAutomaticSaving());
     }
 
     public void addEntity(Entity entity) {

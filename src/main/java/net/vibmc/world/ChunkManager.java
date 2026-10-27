@@ -84,6 +84,31 @@ public final class ChunkManager {
         return written;
     }
 
+    /**
+     * Drops loaded chunks that {@code keep} rejects. Nothing used to leave the cache, so a
+     * server that players explored grew until it ran out of memory. A dirty chunk is written
+     * first and stays loaded if that fails, or if saving is off and it cannot be written.
+     */
+    public int unloadExcept(java.util.function.LongPredicate keep, boolean saveDirty) {
+        int unloaded = 0;
+        for (Map.Entry<Long, WorldChunk> entry : loadedChunks.entrySet()) {
+            if (keep.test(entry.getKey())) continue;
+            WorldChunk chunk = entry.getValue();
+            if (chunk.isDirty()) {
+                if (!saveDirty) continue;
+                try {
+                    storage.writeChunk(chunk.chunkX(), chunk.chunkZ(), chunk.blocks());
+                    chunk.markSaved();
+                } catch (IOException e) {
+                    warn("Failed to save chunk %d,%d before unloading: %s", chunk.chunkX(), chunk.chunkZ(), e);
+                    continue;
+                }
+            }
+            if (loadedChunks.remove(entry.getKey(), chunk)) unloaded++;
+        }
+        return unloaded;
+    }
+
     public int getUnsavedChunkCount() {
         int dirty = 0;
         for (WorldChunk chunk : listLoadedChunks()) {
@@ -94,7 +119,7 @@ public final class ChunkManager {
         return dirty;
     }
 
-    private static long chunkKey(int chunkX, int chunkZ) {
+    static long chunkKey(int chunkX, int chunkZ) {
         return ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
     }
 

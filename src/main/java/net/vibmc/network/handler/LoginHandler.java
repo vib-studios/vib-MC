@@ -16,24 +16,29 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public final class LoginHandler implements PacketHandler {
-    private static final int MAX_AUTHENTICATION_THREADS = 4;
-    private static final int MAX_AUTHENTICATION_QUEUE = 64;
-    private static final ExecutorService AUTH_EXECUTOR = new ThreadPoolExecutor(
-            MAX_AUTHENTICATION_THREADS,
-            MAX_AUTHENTICATION_THREADS,
-            60L,
-            TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(MAX_AUTHENTICATION_QUEUE),
-            runnable -> {
-                Thread thread = new Thread(runnable, "Session Auth");
-                thread.setDaemon(true);
-                return thread;
-            },
-            new ThreadPoolExecutor.AbortPolicy());
+    /**
+     * Session lookups block for up to the HTTP timeouts. Anyone can produce a valid
+     * encryption response with the public key, so a thread per login was unbounded.
+     */
+    private static final java.util.concurrent.ExecutorService AUTHENTICATION = createAuthenticationPool();
+
     private final SecureRandom random = new SecureRandom();
     private String username;
     private byte[] verifyToken;
     private boolean authenticationStarted;
+
+    private static java.util.concurrent.ExecutorService createAuthenticationPool() {
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
+                4, 4, 30L, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<Runnable>(256), task -> {
+                    Thread thread = new Thread(task, "Session Auth #" + counter.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
+    }
 
     public void beginLogin(ServerPlayer connection, String requestedUsername) {
         if (!requestedUsername.matches("[A-Za-z0-9_]{3,16}")) {
@@ -97,9 +102,10 @@ public final class LoginHandler implements PacketHandler {
                 connection.disconnect("Invalid encryption response.");
                 return;
             }
-            String authUsername = username;
             try {
-                AUTH_EXECUTOR.execute(() -> authenticate(connection, sharedSecret));
+                AUTHENTICATION.execute(() -> authenticate(connection, sharedSecret));
+            } catch (java.util.concurrent.RejectedExecutionException busy) {
+                connection.disconnect("The server is busy authenticating other players. Try again shortly.");
             } catch (Exception e) {
                 connection.disconnect("Authentication queue is saturated.");
             }
@@ -109,6 +115,8 @@ public final class LoginHandler implements PacketHandler {
     }
 
     private void authenticate(ServerPlayer connection, byte[] sharedSecret) {
+        // Queued behind other logins long enough for the client to give up.
+        if (!connection.isOpen()) return;
         try {
             SessionAuthentication.AuthenticatedProfile profile =
                     SessionAuthentication.authenticate(username, sharedSecret);

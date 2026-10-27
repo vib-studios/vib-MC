@@ -37,4 +37,4 @@ AI-Subagents: OPENAI (GPT-6); GOOGLE (GEMINI 3 PRO)
 - Keep the disclosure at the very end of the commit message, after the summary and body.
 - Include the same disclosure in the pull request description when AI agents materially contributed to the changes.
 
-The purpose of this disclosure is transparency, not to discourage AI-assisted contributions.
+The purpose of this disclosure is transparency, so we know whether it was made by an janky model, or an good one. Even if u use a not so good one, its okay. Just make sure it works.

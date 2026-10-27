@@ -14,6 +14,8 @@ public final class Inventory {
     public ItemStack getSlot(int index){check(index);return slots[index].copy();}
     public void setSlot(int index,ItemStack item){check(index);slots[index]=item==null?ItemStack.EMPTY:item.copy();}
     public int addItem(ItemStack item){if(item==null||item.isEmpty())return 0;int remaining=item.getAmount();for(ItemStack existing:slots){if(remaining==0)break;if(similar(existing,item)){int space=existing.getType().getMaxAmount()-existing.getAmount();int add=Math.min(space,remaining);existing.setAmount(existing.getAmount()+add);remaining-=add;}}for(int i=0;i<slots.length&&remaining>0;i++){if(slots[i].isEmpty()){int add=Math.min(remaining,item.getType().getMaxAmount());ItemStack placed=item.copy();placed.setAmount(add);slots[i]=placed;remaining-=add;}}return remaining;}
+    /** How many of this item addItem could store right now. */
+    public int spaceFor(ItemStack item){if(item==null||item.isEmpty())return 0;int max=item.getType().getMaxAmount();int space=0;for(ItemStack existing:slots){if(existing.isEmpty())space+=max;else if(similar(existing,item))space+=Math.max(0,existing.getType().getMaxAmount()-existing.getAmount());}return space;}
     public void removeItem(int index,int amount){check(index);if(amount<=0||slots[index].isEmpty())return;slots[index].setAmount(slots[index].getAmount()-amount);if(slots[index].getAmount()<=0)slots[index]=ItemStack.EMPTY;}
     public boolean hasItem(ItemType type,int amount){return countItem(type)>=amount;}
     public int countItem(ItemType type){int count=0;for(ItemStack stack:slots)if(!stack.isEmpty()&&stack.getType()==type)count+=stack.getAmount();return count;}

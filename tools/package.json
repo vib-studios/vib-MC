@@ -13,7 +13,8 @@
     "test:player-persistence": "node player-persistence-test.js",
     "test:spawn-flight": "node spawn-flight-test.js",
     "test:survival": "node survival-test.js",
-    "test:versions": "node version-compat-test.js"
+    "test:versions": "node version-compat-test.js",
+    "test:exploits": "node exploit-fixes-test.js"
   },
   "dependencies": {
     "mineflayer": "4.25.0"

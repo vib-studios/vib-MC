@@ -164,4 +164,31 @@ class WindowServiceTest {
         assertEquals(5, player.getInventory().getSlot(0).getAmount(), "a stale window id changes nothing");
         assertTrue(player.getCarriedItem().isEmpty());
     }
+
+    @Test
+    void shiftClickingACraftThatOnlyPartlyFitsCraftsNothing() {
+        ServerPlayer player = player();
+        for (int slot = 0; slot < 36; slot++) player.getInventory().setSlot(slot, stack(ItemTypes.DIRT, 64));
+        player.getInventory().setSlot(0, stack(ItemTypes.OAK_PLANKS, 62));
+        player.getCrafting().setSlot(0, stack(ItemTypes.OAK_LOG, 1));
+
+        // One log makes four planks, but only two fit.
+        WindowService.click(player, 0, 0, 0, WindowClickType.QUICK_MOVE);
+        assertEquals(62, player.getInventory().getSlot(0).getAmount(), "no planks appear for free");
+        assertEquals(1, player.getCrafting().getSlot(0).getAmount(), "the log is not consumed");
+
+        player.getInventory().setSlot(0, stack(ItemTypes.OAK_PLANKS, 60));
+        WindowService.click(player, 0, 0, 0, WindowClickType.QUICK_MOVE);
+        assertEquals(64, player.getInventory().getSlot(0).getAmount(), "a craft that fits still works");
+        assertTrue(player.getCrafting().getSlot(0).isEmpty());
+    }
+
+    @Test
+    void numberKeySwapCannotPutABlockInAnArmourSlot() {
+        ServerPlayer player = player();
+        player.getInventory().setSlot(0, stack(ItemTypes.COBBLESTONE, 1));
+        WindowService.click(player, 0, HELMET_SLOT, 0, WindowClickType.SWAP);
+        assertTrue(player.getArmorPiece(Armor.HELMET).isEmpty(), "cobblestone is not a helmet");
+        assertEquals(1, player.getInventory().getSlot(0).getAmount());
+    }
 }

@@ -98,4 +98,27 @@ class ChunkPersistenceTest {
         world.chunkManager().saveAll();
         assertEquals(0, world.chunkManager().getUnsavedChunkCount());
     }
+
+    @Test
+    void unloadingWritesDirtyChunksAndDropsThem(@TempDir Path dir) {
+        World world = worldIn(dir);
+        world.getChunk(0, 0).setBlock(1, 100, 1, Blocks.GLASS);
+        world.getChunk(5, 5);
+        long kept = ChunkManager.chunkKey(5, 5);
+
+        assertEquals(1, world.chunkManager().unloadExcept(key -> key == kept, true));
+        assertEquals(1, world.chunkManager().getLoadedChunkCount());
+        assertEquals(Blocks.GLASS, world.getChunk(0, 0).getBlock(1, 100, 1),
+                "an unloaded chunk comes back from disk with its changes");
+    }
+
+    @Test
+    void unloadingWithSavingOffKeepsUnsavedChunks(@TempDir Path dir) {
+        World world = worldIn(dir);
+        world.getChunk(0, 0);
+        assertEquals(0, world.chunkManager().unloadExcept(key -> false, false),
+                "with saving off an unsaved chunk would be lost, so it stays");
+        world.chunkManager().saveAll();
+        assertEquals(1, world.chunkManager().unloadExcept(key -> false, false), "once saved it can go");
+    }
 }

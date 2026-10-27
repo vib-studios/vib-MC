@@ -214,7 +214,11 @@ public final class WindowService {
         ItemStack moving = get(player, session, slot);
         if (moving.isEmpty()) return;
         if (isResultSlot(session, slot)) {
-            if (player.getInventory().addItem(moving) == 0) craftingGrid(player, session).consumeIngredients();
+            // addItem stores whatever fits, so a partial fit used to hand out free items
+            // without consuming the ingredients.
+            if (player.getInventory().spaceFor(moving) < moving.getAmount()) return;
+            player.getInventory().addItem(moving);
+            craftingGrid(player, session).consumeIngredients();
             return;
         }
         int top = session == null ? 46 : session.type().topSize();
@@ -252,7 +256,7 @@ public final class WindowService {
         if (isResultSlot(session, slot)) return;
         ItemStack hotbar = player.getInventory().getSlot(button);
         ItemStack clicked = get(player, session, slot);
-        if (!clicked.isEmpty() && !accepts(player, session, slot, hotbar) && !hotbar.isEmpty()) return;
+        if (!accepts(player, session, slot, hotbar)) return;
         set(player, session, slot, hotbar);
         player.getInventory().setSlot(button, clicked);
     }

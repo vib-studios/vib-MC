@@ -60,6 +60,7 @@ public class ServerPlayer extends Entity {
     private ItemStack carried = ItemStack.EMPTY;
     private int nextWindowId = 1;
     private boolean sneaking, sprinting;
+    private final java.util.concurrent.atomic.AtomicInteger pendingActions = new java.util.concurrent.atomic.AtomicInteger();
 
     public ServerPlayer(User user) {
         this(null,user,null,null);
@@ -179,6 +180,8 @@ public class ServerPlayer extends Entity {
         server.getLogger().info("%s", message);
     }
 
+    /** Gameplay packets decoded on Netty but not yet applied on the tick thread. */
+    public java.util.concurrent.atomic.AtomicInteger pendingActions(){return pendingActions;}
     public boolean isSneaking(){return sneaking;}
     public void setSneaking(boolean value){sneaking=value;}
     public boolean isSprinting(){return sprinting;}

@@ -21,6 +21,7 @@ class BlockInteractionPersistenceTest {
         WorldStorage storage = new WorldStorage(temporaryDirectory.resolve("world").toString());
         World world = new World(44L, "world", storage, WorldEnvironment.OVERWORLD);
         ServerPlayer player = new ServerPlayer(world, null, "Builder", UUID.randomUUID());
+        player.setPosition(2.5, 90, 0.5);
         player.getInventory().setSlot(0, ItemStack.builder().type(ItemTypes.OBSIDIAN).amount(2).build());
 
         BlockInteractionService.place(player, 0, 90, 0, 1);
@@ -37,6 +38,7 @@ class BlockInteractionPersistenceTest {
     void placeableItemUsesPacketEventsPlacedBlockType() {
         World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("placed-type").toString()),WorldEnvironment.OVERWORLD);
         ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,90,0.5);
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.OAK_PLANKS).amount(1).build());
         BlockInteractionService.place(player,0,90,0,1);
         assertEquals(Blocks.OAK_PLANKS,world.getBlockAt(0,91,0));
@@ -46,6 +48,7 @@ class BlockInteractionPersistenceTest {
     void legacyWoodVariantIsNormalizedBeforeImmediateBroadcast() {
         World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("wood-variant").toString()),WorldEnvironment.OVERWORLD);
         ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,90,0.5);
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.DARK_OAK_PLANKS).amount(1).build());
         assertEquals(ItemTypes.DARK_OAK_PLANKS,player.getInventory().getSlot(0).getType());
         BlockInteractionService.place(player,0,90,0,1);
@@ -56,6 +59,7 @@ class BlockInteractionPersistenceTest {
     void legacyInventoryMetadataSelectsPlacedVariant() {
         World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("legacy-item-data").toString()),WorldEnvironment.OVERWORLD);
         ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,90,0.5);
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.WHITE_CARPET).amount(1)
                 .legacyData(3).build());
         BlockInteractionService.place(player,0,90,0,1);
@@ -67,7 +71,7 @@ class BlockInteractionPersistenceTest {
     void placementAppliesAxisAndHorizontalFacing() {
         World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("directions").toString()),WorldEnvironment.OVERWORLD);
         ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
-        player.setPositionAndRotation(20,90,20,0.0f,0.0f);
+        player.setPositionAndRotation(2.5,90,4.5,0.0f,0.0f);
 
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.OAK_LOG).amount(1).build());
         BlockInteractionService.place(player,0,90,0,5);
@@ -81,6 +85,49 @@ class BlockInteractionPersistenceTest {
     }
 
     @Test
+    void waterBucketPlacesSourceThatSpreads() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("water-bucket").toString()),WorldEnvironment.OVERWORLD);
+        int y=90;
+        for(int dx=-3;dx<=3;dx++) for(int dz=-3;dz<=3;dz++) {
+            world.setBlockAt(dx,y-1,dz,Blocks.STONE);
+            world.setBlockAt(dx,y,dz,Blocks.AIR);
+            world.setBlockAt(dx,y+1,dz,Blocks.AIR);
+        }
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,y,0.5);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.WATER_BUCKET).amount(1).build());
+
+        BlockInteractionService.place(player,0,y-1,0,1);
+
+        assertTrue(Blocks.isWater(world.getBlockAt(0,y,0)),"water bucket must place a source block");
+        assertEquals(ItemTypes.BUCKET,player.getInventory().getSlot(0).getType(),
+                "a used bucket must become an empty bucket");
+        for(int tick=1;tick<=40;tick++) world.tick(tick);
+        assertTrue(Blocks.isWater(world.getBlockAt(1,y,0)),
+                "water placed from a bucket must flow into neighbouring air");
+    }
+
+    @Test
+    void lavaBucketPlacesSource() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("lava-bucket").toString()),WorldEnvironment.OVERWORLD);
+        int y=90;
+        for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
+            world.setBlockAt(dx,y-1,dz,Blocks.STONE);
+            world.setBlockAt(dx,y,dz,Blocks.AIR);
+            world.setBlockAt(dx,y+1,dz,Blocks.AIR);
+        }
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,y,0.5);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.LAVA_BUCKET).amount(1).build());
+
+        BlockInteractionService.place(player,0,y-1,0,1);
+
+        assertTrue(Blocks.isLava(world.getBlockAt(0,y,0)),"lava bucket must place a source block");
+        assertEquals(ItemTypes.BUCKET,player.getInventory().getSlot(0).getType(),
+                "a used bucket must become an empty bucket");
+    }
+
+    @Test
     void eyesFillACompletedEndPortalFrame() {
         World world = new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("endportal").toString()),WorldEnvironment.OVERWORLD);
         for(int i=1;i<=3;i++) {
@@ -89,6 +136,7 @@ class BlockInteractionPersistenceTest {
         }
         world.setBlockAt(2,80,0,Blocks.END_PORTAL_FRAME);
         ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,81,2.5);
         player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.ENDER_EYE).amount(1).build());
         BlockInteractionService.place(player,2,80,0,1);
         assertEquals(Blocks.END_PORTAL,world.getBlockAt(2,80,2));
@@ -99,11 +147,56 @@ class BlockInteractionPersistenceTest {
         World world = new World(44L, "world", new WorldStorage(temporaryDirectory.resolve("portal").toString()), WorldEnvironment.OVERWORLD);
         for (int x=0;x<4;x++) for(int y=0;y<5;y++) if(x==0||x==3||y==0||y==4) world.setBlockAt(x,80+y,0,Blocks.OBSIDIAN);
         ServerPlayer player = new ServerPlayer(world, null, "Builder", UUID.randomUUID());
+        player.setPosition(2.5, 80, 2.5);
         player.getInventory().setSlot(0, ItemStack.builder().type(ItemTypes.FLINT_AND_STEEL).amount(1).build());
 
         BlockInteractionService.place(player, 0, 80, 0, 1);
 
         assertEquals(Blocks.NETHER_PORTAL, world.getBlockAt(1,81,0));
         assertTrue(world.chunkManager().getUnsavedChunkCount() > 0);
+    }
+
+    @Test
+    void blocksOutOfReachCannotBeChanged() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("reach").toString()),WorldEnvironment.OVERWORLD);
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(40.5,90,0.5);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.OBSIDIAN).amount(1).build());
+        BlockInteractionService.place(player,0,90,0,1);
+        assertEquals(Blocks.AIR,world.getBlockAt(0,91,0),"placing forty blocks away is rejected");
+
+        world.setBlockAt(0,91,0,Blocks.OBSIDIAN);
+        BlockInteractionService.dig(player,2,0,91,0);
+        assertEquals(Blocks.OBSIDIAN,world.getBlockAt(0,91,0),"so is breaking");
+    }
+
+    @Test
+    void spectatorsCannotBreakOrPlace() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("spectator").toString()),WorldEnvironment.OVERWORLD);
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,90,0.5);
+        player.setGameMode(net.vibmc.player.GameMode.SPECTATOR);
+        player.getInventory().setSlot(0,ItemStack.builder().type(ItemTypes.OBSIDIAN).amount(1).build());
+        BlockInteractionService.place(player,0,90,0,1);
+        assertEquals(Blocks.AIR,world.getBlockAt(0,91,0));
+
+        world.setBlockAt(0,91,0,Blocks.OBSIDIAN);
+        BlockInteractionService.dig(player,2,0,91,0);
+        assertEquals(Blocks.OBSIDIAN,world.getBlockAt(0,91,0));
+    }
+
+    @Test
+    void breakingAChestEmptiesItsInventory() {
+        World world=new World(44L,"world",new WorldStorage(temporaryDirectory.resolve("chest-break").toString()),WorldEnvironment.OVERWORLD);
+        world.setBlockAt(0,91,0,Blocks.CHEST);
+        net.vibmc.inventory.Inventory chest=world.blockEntities().container(0,91,0,"Chest",BlockEntities.CHEST_SIZE);
+        chest.setSlot(0,ItemStack.builder().type(ItemTypes.DIAMOND).amount(5).build());
+        ServerPlayer player=new ServerPlayer(world,null,"Builder",UUID.randomUUID());
+        player.setPosition(2.5,90,0.5);
+
+        BlockInteractionService.dig(player,2,0,91,0);
+        assertEquals(5,player.getInventory().countItem(ItemTypes.DIAMOND),"the breaker gets the contents");
+        assertEquals(0,chest.countItem(ItemTypes.DIAMOND),
+                "a window still holding the old inventory must not find the items a second time");
     }
 }
