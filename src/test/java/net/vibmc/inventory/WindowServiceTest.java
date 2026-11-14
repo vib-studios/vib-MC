@@ -157,6 +157,19 @@ class WindowServiceTest {
     }
 
     @Test
+    void modernWindowTypesMatchTheMenuRegistryForEachProtocolFamily() {
+        assertEquals(2, WindowSession.Type.CHEST.modernType(ClientVersion.V_1_14),
+                "chests are generic_9x3 in every 1.14+ menu registry");
+        assertEquals(11, WindowSession.Type.CRAFTING_TABLE.modernType(ClientVersion.V_1_20_2));
+        assertEquals(13, WindowSession.Type.FURNACE.modernType(ClientVersion.V_1_20_2));
+        assertEquals(12, WindowSession.Type.CRAFTING_TABLE.modernType(ClientVersion.V_1_20_3),
+                "crafter_3x3 shifted crafting up by one");
+        assertEquals(14, WindowSession.Type.FURNACE.modernType(ClientVersion.V_1_20_3),
+                "crafter_3x3 shifted the furnace up by one");
+        assertEquals(2, WindowSession.Type.CHEST.modernType(ClientVersion.V_1_21));
+    }
+
+    @Test
     void clicksForAWindowThatIsNotOpenAreIgnored() {
         ServerPlayer player = player();
         player.getInventory().setSlot(0, stack(ItemTypes.DIAMOND, 5));

@@ -38,7 +38,8 @@ public final class WindowService {
         boolean modern = player.getUser().getClientVersion().isNewerThanOrEquals(
                 com.github.retrooper.packetevents.protocol.player.ClientVersion.V_1_14);
         player.getUser().sendPacket(modern
-                ? new WrapperPlayServerOpenWindow(session.windowId(), session.type().modernType(), title)
+                ? new WrapperPlayServerOpenWindow(session.windowId(),
+                        session.type().modernType(player.getUser().getClientVersion()), title)
                 : new WrapperPlayServerOpenWindow(session.windowId(), session.type().legacyId(), title,
                         session.type().topSize(), 0));
         refresh(player);
