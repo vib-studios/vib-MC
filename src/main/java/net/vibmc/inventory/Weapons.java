@@ -22,9 +22,14 @@ public final class Weapons {
         else if (name.startsWith("netherite")) material = 4.0f;
         else return FIST;
         if (name.endsWith("_sword")) return 4.0f + material;
-        if (name.endsWith("_axe")) return 7.0f + (material > 0 ? material - 1.0f : 0.0f);
+        // Axes jump straight from 7 (wood/gold) to 9 (stone/iron/diamond), plus one for netherite.
+        if (name.endsWith("_axe")) {
+            if (material >= 4.0f) return 10.0f;
+            return material >= 1.0f ? 9.0f : 7.0f;
+        }
         if (name.endsWith("_pickaxe")) return 2.0f + material;
-        if (name.endsWith("_shovel")) return 1.0f + material;
+        // Shovels start at 2.5 rather than 1 and gain half a point per material tier.
+        if (name.endsWith("_shovel")) return 2.5f + material;
         if (name.endsWith("_hoe")) return FIST;
         return FIST;
     }

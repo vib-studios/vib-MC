@@ -115,6 +115,21 @@ class SurvivalMechanicsTest {
     }
 
     @Test
+    void axeAndShovelDamageMatchVanilla() {
+        assertEquals(7.0f, Weapons.attackDamage(stack(ItemTypes.WOODEN_AXE)), 0.001f);
+        assertEquals(7.0f, Weapons.attackDamage(stack(ItemTypes.GOLDEN_AXE)), 0.001f);
+        assertEquals(9.0f, Weapons.attackDamage(stack(ItemTypes.STONE_AXE)), 0.001f);
+        assertEquals(9.0f, Weapons.attackDamage(stack(ItemTypes.IRON_AXE)), 0.001f);
+        assertEquals(9.0f, Weapons.attackDamage(stack(ItemTypes.DIAMOND_AXE)), 0.001f);
+
+        assertEquals(2.5f, Weapons.attackDamage(stack(ItemTypes.WOODEN_SHOVEL)), 0.001f);
+        assertEquals(2.5f, Weapons.attackDamage(stack(ItemTypes.GOLDEN_SHOVEL)), 0.001f);
+        assertEquals(3.5f, Weapons.attackDamage(stack(ItemTypes.STONE_SHOVEL)), 0.001f);
+        assertEquals(4.5f, Weapons.attackDamage(stack(ItemTypes.IRON_SHOVEL)), 0.001f);
+        assertEquals(5.5f, Weapons.attackDamage(stack(ItemTypes.DIAMOND_SHOVEL)), 0.001f);
+    }
+
+    @Test
     void armorSoaksDamageThroughTheHurtPipeline() {
         ServerPlayer unarmored = player();
         unarmored.hurt(10.0f, DamageSource.PLAYER, "Attacker");
