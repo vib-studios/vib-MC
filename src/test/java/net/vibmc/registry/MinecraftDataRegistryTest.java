@@ -40,4 +40,13 @@ class MinecraftDataRegistryTest {
         assertSame(first,data.data("version"));
         assertEquals(763,first.getAsJsonObject().get("version").getAsInt());
     }
+
+    @Test
+    void versionsWithoutABundledSnapshotAreReportedAsUnsupported(){
+        assertTrue(MinecraftDataRegistry.get().supports(ClientVersion.V_1_8),
+                "pre-1.16.2 clients use the legacy empty codec");
+        assertTrue(MinecraftDataRegistry.get().supports(ClientVersion.V_26_1));
+        assertFalse(MinecraftDataRegistry.get().supports(ClientVersion.V_26_2),
+                "minecraft-data has no 26.2 login snapshot yet");
+    }
 }

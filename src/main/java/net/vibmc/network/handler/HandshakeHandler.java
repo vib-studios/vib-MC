@@ -40,6 +40,16 @@ public final class HandshakeHandler implements PacketHandler {
                 connection.disconnect("Minecraft 1.16 and 1.16.1 are unsupported due to PacketEvents packet ID issues.");
             return;
         }
+        if (!net.vibmc.registry.MinecraftDataRegistry.get().supports(activeVersion)) {
+            // The configuration phase would otherwise fail while loading registry data, after
+            // authentication, leaving the client stuck on a hidden connection.
+            VibMC.getInstance().getLogger().warn(
+                    "Rejecting protocol %d (%s): no bundled minecraft-data snapshot",
+                    protocol, activeVersion.getReleaseName());
+            connection.disconnect("Minecraft " + activeVersion.getReleaseName()
+                    + " is not supported by this server yet.");
+            return;
+        }
         VibMC.getInstance().getLogger().info(
                 "Accepting login protocol %d; PacketEvents client=%s/%d, native server=1.12.2/340",
                 protocol, activeVersion.getReleaseName(), activeVersion.getProtocolVersion());
