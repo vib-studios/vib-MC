@@ -76,6 +76,21 @@ public final class MinecraftDataRegistry {
 
     public Set<String> releases(){return pathsByVersion.keySet();}
 
+    /**
+     * True when this client's configuration phase can be served from a bundled minecraft-data
+     * snapshot. Clients older than 1.16.2 use the legacy empty codec and need no snapshot.
+     */
+    public boolean supports(ClientVersion clientVersion){
+        if(clientVersion==null)return false;
+        if(clientVersion.isOlderThan(ClientVersion.V_1_16_2))return true;
+        try{
+            selectRelease(clientVersion);
+            return true;
+        }catch(IllegalArgumentException unsupported){
+            return false;
+        }
+    }
+
     private String selectRelease(ClientVersion clientVersion){
         String release=clientVersion.getReleaseName();
         if(release!=null){
